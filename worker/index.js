@@ -12,6 +12,12 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Keep cajunsites.com as the single canonical host for users and search engines.
+    if (url.hostname === 'www.cajunsites.com') {
+      url.hostname = 'cajunsites.com';
+      return Response.redirect(url.toString(), 301);
+    }
+
     if (url.pathname !== '/api/lead') {
       return env.ASSETS.fetch(request);
     }
