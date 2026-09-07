@@ -25,6 +25,62 @@ const faqs = [
     '@context':'https://schema.org', '@type':'ProfessionalService', name:'CajunSites', url:'https://cajunsites.com',
     description:'Professional websites built for small business.', areaServed:'US'
   })}></script>
+  <style>
+    .feature .icon svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .examples-section { padding-bottom:60px; }
+    .process-section { padding-top:54px; padding-bottom:54px; }
+    .examples-intro { display:flex; justify-content:space-between; align-items:end; gap:28px; margin-bottom:28px; }
+    .examples-intro h2 { margin-bottom:0; }
+    .examples-note { max-width:390px; margin:0; font-size:.92rem; text-align:right; }
+    .example-preview { height:220px; position:relative; overflow:hidden; }
+    .preview-browser { position:absolute; inset:14px 14px 0; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 12px 24px rgba(20,15,25,.12); }
+    .preview-bar { height:20px; display:flex; align-items:center; gap:4px; padding:0 8px; background:rgba(255,255,255,.88); }
+    .preview-bar i { width:4px; height:4px; border-radius:50%; background:rgba(20,20,20,.22); }
+    .preview-one { background:#dbe8eb; }
+    .preview-one .preview-browser { background:#fff; }
+    .mini-one-nav { display:flex; justify-content:space-between; padding:10px 12px; color:#173e4d; font-size:.5rem; font-weight:800; }
+    .mini-one-hero { margin:0 10px; border-radius:8px; padding:18px 14px; background:#1e5260; color:#fff; min-height:108px; }
+    .mini-one-hero small,.mini-two-copy small,.mini-three-copy small { display:block; text-transform:uppercase; letter-spacing:.12em; font-size:.4rem; font-weight:800; opacity:.72; }
+    .mini-one-hero strong { display:block; font-size:1.25rem; line-height:1; margin:6px 0; max-width:160px; }
+    .mini-one-hero span { display:block; font-size:.48rem; opacity:.84; max-width:155px; }
+    .mini-services { display:flex; gap:5px; padding:9px 10px; }
+    .mini-services b { flex:1; padding:6px; border:1px solid #dde5e7; border-radius:5px; font-size:.4rem; color:#355b64; }
+    .preview-two { background:#c7a177; }
+    .preview-two .preview-browser { background:#ede5dc; }
+    .mini-two-nav { display:flex; justify-content:space-between; padding:10px 12px; font-size:.5rem; font-weight:850; color:#382718; }
+    .mini-two-layout { display:grid; grid-template-columns:1.08fr .92fr; min-height:154px; }
+    .mini-two-copy { padding:24px 14px; background:#3c2b20; color:#fff; }
+    .mini-two-copy strong { display:block; font-size:1.35rem; line-height:.95; margin:7px 0 8px; }
+    .mini-two-copy span { display:inline-block; font-size:.44rem; border-bottom:1px solid rgba(255,255,255,.5); padding-bottom:2px; }
+    .mini-two-art { position:relative; background:#b5895f; }
+    .mini-two-art:before,.mini-two-art:after { content:""; position:absolute; left:18%; right:18%; border:3px solid rgba(255,255,255,.78); border-bottom:0; }
+    .mini-two-art:before { top:28px; height:70px; transform:skewY(-9deg); }
+    .mini-two-art:after { top:54px; height:52px; left:30%; right:30%; }
+    .preview-three { background:#ddd8e8; }
+    .preview-three .preview-browser { background:#fbfaf8; }
+    .mini-three-nav { display:flex; justify-content:space-between; padding:10px 12px; font-size:.48rem; color:#393345; }
+    .mini-three-nav b { font-family:Georgia,serif; font-size:.65rem; }
+    .mini-three-layout { display:grid; grid-template-columns:1fr .78fr; min-height:155px; }
+    .mini-three-copy { padding:24px 15px; }
+    .mini-three-copy strong { display:block; font-family:Georgia,serif; font-size:1.22rem; line-height:1.02; color:#332b43; margin:7px 0 8px; }
+    .mini-three-copy span { font-size:.45rem; color:#756c7b; }
+    .mini-three-panel { margin:14px 12px 14px 0; border-radius:8px; background:#57456b; display:grid; place-items:center; color:#fff; text-align:center; font-family:Georgia,serif; font-size:.75rem; padding:12px; }
+    .example-body { min-height:150px; }
+    .example-tag { display:inline-block; margin-bottom:8px; font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.09em; color:var(--purple-700); }
+    .step { position:relative; }
+    .callout { margin-top:2px; }
+    .faq details { position:relative; }
+    .faq summary { padding-right:34px; }
+    .faq summary:after { content:'+'; position:absolute; right:4px; top:16px; color:var(--purple-700); font-size:1.35rem; font-weight:500; }
+    .faq details[open] summary:after { content:'−'; }
+    .cta { padding-top:70px; padding-bottom:70px; }
+    .cta h2 { margin-inline:auto; max-width:880px; }
+    @media (max-width:900px) {
+      .examples-intro { align-items:start; flex-direction:column; gap:10px; }
+      .examples-note { text-align:left; }
+      .example-body { min-height:0; }
+    }
+  </style>
 </head>
 <body>
   <header class="header">
@@ -66,10 +122,10 @@ const faqs = [
 
     <section id="included" class="trustbar">
       <div class="container features">
-        <div class="feature"><div class="icon">M</div><h3>Mobile Friendly</h3><p>Looks polished on phones, tablets and computers.</p></div>
-        <div class="feature"><div class="icon">S</div><h3>SEO Foundation</h3><p>Search-friendly structure, metadata and performance from day one.</p></div>
-        <div class="feature"><div class="icon">✓</div><h3>Secure Hosting</h3><p>Fast hosting, SSL, security and backups are handled for you.</p></div>
-        <div class="feature"><div class="icon">↻</div><h3>Routine Updates</h3><p>Hours, services, photos and contact details can stay current.</p></div>
+        <div class="feature"><div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M10 18.5h4"/></svg></div><h3>Mobile Friendly</h3><p>Looks polished on phones, tablets and computers.</p></div>
+        <div class="feature"><div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5"/></svg></div><h3>SEO Foundation</h3><p>Search-friendly structure, metadata and performance from day one.</p></div>
+        <div class="feature"><div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l7 3v5.2c0 4.5-2.8 8.5-7 10.8-4.2-2.3-7-6.3-7-10.8V5.5l7-3z"/><path d="M8.5 12l2.2 2.2 4.8-5"/></svg></div><h3>Secure Hosting</h3><p>Fast hosting, SSL, security and backups are handled for you.</p></div>
+        <div class="feature"><div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a7 7 0 10.8 6.9"/><path d="M19 3v5h-5"/><path d="M5 16v5h5"/></svg></div><h3>Routine Updates</h3><p>Hours, services, photos and contact details can stay current.</p></div>
       </div>
     </section>
 
@@ -83,18 +139,27 @@ const faqs = [
       </div>
     </section>
 
-    <section id="examples" class="section">
+    <section id="examples" class="section examples-section">
       <div class="container">
-        <div class="eyebrow">Flexible by design</div><h2>Built for businesses like yours.</h2>
+        <div class="examples-intro"><div><div class="eyebrow">Flexible by design</div><h2>Built for businesses like yours.</h2></div><p class="examples-note">Different businesses need different personalities. These sample concepts show how the structure can adapt without every site looking the same.</p></div>
         <div class="examples-grid">
-          <article class="example"><div class="example-art">Home Services</div><div class="example-body"><h3>Home Services</h3><p>HVAC, plumbing, electrical, cleaning, pest control and similar service businesses.</p></div></article>
-          <article class="example"><div class="example-art">Construction &amp; Trades</div><div class="example-body"><h3>Construction &amp; Trades</h3><p>Roofing, construction, landscaping, concrete, painting and specialty trades.</p></div></article>
-          <article class="example"><div class="example-art">Professional Services</div><div class="example-body"><h3>Professional Services</h3><p>Accounting, legal, consulting and other professional service firms.</p></div></article>
+          <article class="example">
+            <div class="example-preview preview-one"><div class="preview-browser"><div class="preview-bar"><i></i><i></i><i></i></div><div class="mini-one-nav"><b>GULF AIR &amp; HEAT</b><span>Services&nbsp;&nbsp; About&nbsp;&nbsp; Contact</span></div><div class="mini-one-hero"><small>Home comfort specialists</small><strong>Comfort that shows up.</strong><span>Heating and cooling service with straightforward scheduling.</span></div><div class="mini-services"><b>AC Repair</b><b>Maintenance</b><b>Installation</b></div></div></div>
+            <div class="example-body"><span class="example-tag">Sample concept</span><h3>Home Services</h3><p>HVAC, plumbing, electrical, cleaning, pest control and similar service businesses.</p></div>
+          </article>
+          <article class="example">
+            <div class="example-preview preview-two"><div class="preview-browser"><div class="preview-bar"><i></i><i></i><i></i></div><div class="mini-two-nav"><b>ARC &amp; BEAM</b><span>WORK&nbsp;&nbsp; SERVICES&nbsp;&nbsp; CONTACT</span></div><div class="mini-two-layout"><div class="mini-two-copy"><small>Crafted construction</small><strong>Built to last.</strong><span>View our work →</span></div><div class="mini-two-art"></div></div></div></div>
+            <div class="example-body"><span class="example-tag">Sample concept</span><h3>Construction &amp; Trades</h3><p>Roofing, construction, landscaping, concrete, painting and specialty trades.</p></div>
+          </article>
+          <article class="example">
+            <div class="example-preview preview-three"><div class="preview-browser"><div class="preview-bar"><i></i><i></i><i></i></div><div class="mini-three-nav"><b>Northline Advisory</b><span>Expertise&nbsp;&nbsp; Firm&nbsp;&nbsp; Contact</span></div><div class="mini-three-layout"><div class="mini-three-copy"><small>Clear advice. Practical direction.</small><strong>Decisions deserve perspective.</strong><span>Advisory support for growing businesses.</span></div><div class="mini-three-panel">Thoughtful counsel.<br/>Clear next steps.</div></div></div></div>
+            <div class="example-body"><span class="example-tag">Sample concept</span><h3>Professional Services</h3><p>Accounting, legal, consulting and other professional service firms.</p></div>
+          </article>
         </div>
       </div>
     </section>
 
-    <section class="section-tight">
+    <section class="section-tight process-section">
       <div class="container"><div class="eyebrow">How it works</div><h2>From your business to a new website.</h2><div class="steps">
         <div class="step"><h3>Tell us about your business</h3><p>Share your services, contact details, photos and what you want customers to know.</p></div>
         <div class="step"><h3>We build it</h3><p>CajunSites handles the design, content structure, mobile experience and SEO foundation.</p></div>
