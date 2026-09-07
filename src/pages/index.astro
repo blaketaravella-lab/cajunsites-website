@@ -16,14 +16,51 @@ const faqs = [
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CajunSites | Websites Built for Small Business</title>
   <meta name="description" content="Professional small-business websites for $499 to design and launch, then $49/month for hosting and maintenance." />
+  <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://cajunsites.com/" />
+  <meta property="og:site_name" content="CajunSites" />
   <meta property="og:title" content="CajunSites | Websites Built for Small Business" />
   <meta property="og:description" content="A professional website without the agency price. $499 design and launch. $49/month hosting and maintenance." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://cajunsites.com/" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="CajunSites | Websites Built for Small Business" />
+  <meta name="twitter:description" content="A professional website without the agency price. $499 design and launch. $49/month hosting and maintenance." />
   <script type="application/ld+json" set:html={JSON.stringify({
-    '@context':'https://schema.org', '@type':'ProfessionalService', name:'CajunSites', url:'https://cajunsites.com',
-    description:'Professional websites built for small business.', areaServed:'US'
+    '@context':'https://schema.org',
+    '@graph':[
+      {
+        '@type':'WebSite',
+        '@id':'https://cajunsites.com/#website',
+        name:'CajunSites',
+        url:'https://cajunsites.com/',
+        description:'Professional websites built for small business.'
+      },
+      {
+        '@type':'ProfessionalService',
+        '@id':'https://cajunsites.com/#business',
+        name:'CajunSites',
+        url:'https://cajunsites.com/',
+        description:'Professional small-business websites with design, launch, hosting and maintenance.',
+        areaServed:{'@type':'Country',name:'United States'},
+        offers:[
+          {
+            '@type':'Offer',
+            name:'Website Design & Launch',
+            price:'499',
+            priceCurrency:'USD',
+            description:'Website design and launch, including up to 5 pages, contact/quote form, domain connection, Google Maps integration and SEO foundation.'
+          },
+          {
+            '@type':'Offer',
+            name:'Hosting & Maintenance',
+            price:'49',
+            priceCurrency:'USD',
+            description:'Monthly hosting, SSL, backups, monitoring and routine website updates.'
+          }
+        ]
+      }
+    ]
   })}></script>
   <style>
     .feature .icon svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
