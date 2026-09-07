@@ -72,7 +72,7 @@ export default {
 
       await env.SEND_EMAIL.send({
         from: 'hello@cajunsites.com',
-        to: 'hello@cajunsites.com',
+        to: 'blaketaravella@gmail.com',
         subject: `New website inquiry: ${business}`,
         text,
       });
