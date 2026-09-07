@@ -35,6 +35,28 @@ export default {
         return json({ ok: true });
       }
 
+      const turnstileToken = clean(data['cf-turnstile-response'], 4096);
+      if (!turnstileToken) {
+        return json({ ok: false, error: 'Please complete the security check and try again.' }, 400);
+      }
+
+      const verifyBody = new FormData();
+      verifyBody.append('secret', env.TURNSTILE_SECRET);
+      verifyBody.append('response', turnstileToken);
+      const remoteIp = request.headers.get('CF-Connecting-IP');
+      if (remoteIp) verifyBody.append('remoteip', remoteIp);
+
+      const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        body: verifyBody,
+      });
+      const verification = await verifyResponse.json();
+
+      if (!verification.success) {
+        console.warn('Turnstile verification failed', verification['error-codes'] || []);
+        return json({ ok: false, error: 'Security verification failed. Please try again.' }, 403);
+      }
+
       const name = clean(data.name, 120);
       const business = clean(data.business, 160);
       const email = clean(data.email, 254);
