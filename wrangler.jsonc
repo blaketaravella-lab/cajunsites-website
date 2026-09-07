@@ -13,5 +13,9 @@
       "name": "SEND_EMAIL",
       "destination_address": "blaketaravella@gmail.com"
     }
-  ]
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
 }
