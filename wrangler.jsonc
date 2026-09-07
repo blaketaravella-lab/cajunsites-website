@@ -14,9 +14,6 @@
       "destination_address": "blaketaravella@gmail.com"
     }
   ],
-  "secrets": {
-    "required": ["TURNSTILE_SECRET"]
-  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
