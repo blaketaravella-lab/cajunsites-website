@@ -10,7 +10,8 @@
   },
   "send_email": [
     {
-      "name": "SEND_EMAIL"
+      "name": "SEND_EMAIL",
+      "destination_address": "blaketaravella@gmail.com"
     }
   ]
 }
