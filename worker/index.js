@@ -12,7 +12,6 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Keep cajunsites.com as the single canonical host for users and search engines.
     if (url.hostname === 'www.cajunsites.com') {
       url.hostname = 'cajunsites.com';
       return Response.redirect(url.toString(), 301);
@@ -41,25 +40,45 @@ export default {
         return json({ ok: true });
       }
 
-      const turnstileToken = clean(data['cf-turnstile-response'], 4096);
+      const turnstileToken = clean(data['cf-turnstile-response'], 2048);
       if (!turnstileToken) {
         return json({ ok: false, error: 'Please complete the security check and try again.' }, 400);
       }
 
-      const verifyBody = new FormData();
-      verifyBody.append('secret', env.TURNSTILE_SECRET);
-      verifyBody.append('response', turnstileToken);
-      const remoteIp = request.headers.get('CF-Connecting-IP');
-      if (remoteIp) verifyBody.append('remoteip', remoteIp);
+      if (!env.TURNSTILE_SECRET) {
+        console.error('TURNSTILE_SECRET is not configured');
+        return json({ ok: false, error: 'Security verification is temporarily unavailable. Please try again.' }, 500);
+      }
 
-      const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-        method: 'POST',
-        body: verifyBody,
-      });
-      const verification = await verifyResponse.json();
+      let verification;
+      try {
+        const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          signal: AbortSignal.timeout(10000),
+          body: new URLSearchParams({
+            secret: env.TURNSTILE_SECRET,
+            response: turnstileToken,
+            remoteip: request.headers.get('CF-Connecting-IP') || '',
+          }),
+        });
 
-      if (!verification.success) {
-        console.warn('Turnstile verification failed', verification['error-codes'] || []);
+        if (!verifyResponse.ok) {
+          throw new Error(`Siteverify returned HTTP ${verifyResponse.status}`);
+        }
+
+        verification = await verifyResponse.json();
+      } catch (error) {
+        console.error('Turnstile Siteverify request failed', error);
+        return json({ ok: false, error: 'Security verification is temporarily unavailable. Please try again.' }, 503);
+      }
+
+      if (!verification.success || verification.action !== 'lead') {
+        console.warn('Turnstile verification failed', {
+          errors: verification['error-codes'] || [],
+          action: verification.action || null,
+          hostname: verification.hostname || null,
+        });
         return json({ ok: false, error: 'Security verification failed. Please try again.' }, 403);
       }
 
