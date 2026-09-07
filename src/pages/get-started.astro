@@ -1,7 +1,7 @@
 ---
 import '../styles/global.css';
 ---
-<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Get Started | CajunSites</title><meta name="description" content="Tell CajunSites about your business and start your new website."/><link rel="canonical" href="https://cajunsites.com/get-started/"/></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Get Started | CajunSites</title><meta name="description" content="Tell CajunSites about your business and start your new website."/><link rel="canonical" href="https://cajunsites.com/get-started/"/><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script></head><body>
 <header class="header"><div class="container nav"><a class="brand" href="/"><span class="wordmark">Cajun<span>Sites</span></span><small>Websites Built for Small Business</small></a><nav class="navlinks"><a href="/">Home</a><a class="button" href="/get-started/">Get Started</a></nav></div></header>
 <main><section class="section"><div class="container"><div class="form-card"><div class="eyebrow">Get Started</div><h1 style="font-size:clamp(2.7rem,6vw,4.8rem)">Tell us about your business.</h1><p>Share the basics below. We'll use this information to understand what your website needs.</p>
 <form id="lead-form" method="post" action="/api/lead" class="form-grid">
@@ -14,6 +14,7 @@ import '../styles/global.css';
 <div class="full"><label for="services">Main services</label><textarea id="services" name="services" placeholder="Tell us what you do and the services you want featured."></textarea></div>
 <div class="full"><label for="notes">Anything else?</label><textarea id="notes" name="notes" placeholder="Service area, current social pages, special requests, etc."></textarea></div>
 <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"/></div>
+<div class="full"><div class="cf-turnstile" data-sitekey="0x4AAAAAAEq39H8cpxuqOQWG" data-action="lead"></div></div>
 <div class="full"><button id="submit-button" class="button" type="submit">Send My Information</button><p id="form-status" class="microcopy" role="status" aria-live="polite">We'll review your information and follow up with you.</p></div>
 </form></div></div></section></main>
 <footer class="footer"><div class="container footer-row"><div><strong>CajunSites.com</strong></div><div><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></div></div></footer>
@@ -38,9 +39,11 @@ import '../styles/global.css';
       if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to send.');
 
       form.reset();
+      if (window.turnstile) window.turnstile.reset();
       status.textContent = 'Thanks! We received your information and will be in touch.';
       button.textContent = 'Information Sent';
     } catch (error) {
+      if (window.turnstile) window.turnstile.reset();
       status.textContent = error.message || 'We could not send your information. Please try again.';
       button.disabled = false;
       button.textContent = 'Send My Information';
