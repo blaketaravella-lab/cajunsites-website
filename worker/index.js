@@ -50,28 +50,21 @@ export default {
         return json({ ok: false, error: 'Security verification is temporarily unavailable. Please try again.' }, 500);
       }
 
-      let verification;
-      try {
-        const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          signal: AbortSignal.timeout(10000),
-          body: new URLSearchParams({
-            secret: env.TURNSTILE_SECRET,
-            response: turnstileToken,
-            remoteip: request.headers.get('CF-Connecting-IP') || '',
-          }),
-        });
+      const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        body: new URLSearchParams({
+          secret: env.TURNSTILE_SECRET,
+          response: turnstileToken,
+          remoteip: request.headers.get('CF-Connecting-IP') || '',
+        }),
+      });
 
-        if (!verifyResponse.ok) {
-          throw new Error(`Siteverify returned HTTP ${verifyResponse.status}`);
-        }
-
-        verification = await verifyResponse.json();
-      } catch (error) {
-        console.error('Turnstile Siteverify request failed', error);
+      if (!verifyResponse.ok) {
+        console.error('Turnstile Siteverify HTTP error', verifyResponse.status);
         return json({ ok: false, error: 'Security verification is temporarily unavailable. Please try again.' }, 503);
       }
+
+      const verification = await verifyResponse.json();
 
       if (!verification.success || verification.action !== 'lead') {
         console.warn('Turnstile verification failed', {
