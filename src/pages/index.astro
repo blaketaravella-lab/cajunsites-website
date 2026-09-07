@@ -1,0 +1,118 @@
+---
+import '../styles/global.css';
+const faqs = [
+  ['Do I own my domain?', 'Yes. Your domain stays yours. If we help you register one, it should be registered for your business, not held hostage by CajunSites.'],
+  ['Do I need to already have a domain?', 'No. If you do not have one yet, we can help you choose and connect a standard domain for your business.'],
+  ['How many pages are included?', 'The standard website includes up to five pages, which is enough for most small-business brochure and lead-generation websites.'],
+  ['Can I request changes?', 'Yes. Routine updates such as hours, services, photos, contact information and similar website content changes are included with the monthly service.'],
+  ['Can I sell products online?', 'Ecommerce is not included in the standard CajunSites package. We keep the base product focused on professional business websites and lead generation.'],
+  ['Is SEO included?', 'Every site includes an SEO foundation: search-friendly structure, metadata, performance, mobile optimization and indexing basics. Ongoing SEO campaigns are separate.']
+];
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CajunSites | Websites Built for Small Business</title>
+  <meta name="description" content="Professional small-business websites for $499 to design and launch, then $49/month for hosting and maintenance." />
+  <link rel="canonical" href="https://cajunsites.com/" />
+  <meta property="og:title" content="CajunSites | Websites Built for Small Business" />
+  <meta property="og:description" content="A professional website without the agency price. $499 design and launch. $49/month hosting and maintenance." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://cajunsites.com/" />
+  <script type="application/ld+json" set:html={JSON.stringify({
+    '@context':'https://schema.org', '@type':'ProfessionalService', name:'CajunSites', url:'https://cajunsites.com',
+    description:'Professional websites built for small business.', areaServed:'US'
+  })}></script>
+</head>
+<body>
+  <header class="header">
+    <div class="container nav">
+      <a class="brand" href="/">
+        <span class="wordmark">Cajun<span>Sites</span></span>
+        <small>Websites Built for Small Business</small>
+      </a>
+      <nav class="navlinks" aria-label="Primary navigation">
+        <a href="#examples">Examples</a><a href="#included">What's Included</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
+        <a class="button" href="/get-started/">Get Started</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow">Websites Built for Small Business</div>
+          <h1>A professional website. <span>Without the agency price.</span></h1>
+          <p>Get a modern, mobile-friendly website built around your business without spending thousands of dollars.</p>
+          <div class="price-line"><span>$499 Website Design &amp; Launch</span><span>$49/mo Hosting &amp; Maintenance</span></div>
+          <div class="hero-actions"><a class="button" href="/get-started/">Get Started</a><a class="button secondary" href="#examples">See Examples</a></div>
+          <div class="microcopy">No long-term contract. Your domain stays yours.</div>
+        </div>
+        <div class="browser-shell" aria-label="Example small business website preview">
+          <div class="browser">
+            <div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="demo-nav"><span class="demo-logo">BAYOU BUILDERS</span><span class="demo-links"><span>Home</span><span>Services</span><span>About</span><span>Contact</span></span></div>
+            <div class="demo-hero"><strong>Built for Louisiana living.</strong><span>Reliable residential construction with clear estimates and straightforward service.</span></div>
+            <div class="demo-services"><div>New Builds</div><div>Renovations</div><div>Outdoor</div><div>Repairs</div></div>
+          </div>
+          <div class="phone"><div class="phone-top"></div><div class="phone-screen"><b>BAYOU BUILDERS</b><strong>Built for Louisiana living.</strong><span>Quality work. Clear communication.</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="included" class="trustbar">
+      <div class="container features">
+        <div class="feature"><div class="icon">M</div><h3>Mobile Friendly</h3><p>Looks polished on phones, tablets and computers.</p></div>
+        <div class="feature"><div class="icon">S</div><h3>SEO Foundation</h3><p>Search-friendly structure, metadata and performance from day one.</p></div>
+        <div class="feature"><div class="icon">✓</div><h3>Secure Hosting</h3><p>Fast hosting, SSL, security and backups are handled for you.</p></div>
+        <div class="feature"><div class="icon">↻</div><h3>Routine Updates</h3><p>Hours, services, photos and contact details can stay current.</p></div>
+      </div>
+    </section>
+
+    <section id="pricing" class="section pricing">
+      <div class="container">
+        <div class="eyebrow">Straightforward pricing</div><h2>Simple pricing. No agency-sized bill.</h2>
+        <div class="pricing-grid">
+          <article class="price-card"><div class="price">$499</div><h3>Website Design &amp; Launch</h3><p>We build your website, personalize it for your business, optimize it for mobile and search, connect your domain and launch it.</p><p><strong>Includes up to 5 pages, contact/quote form, domain connection, Google Maps integration and SEO foundation.</strong></p></article>
+          <article class="price-card"><div class="price">$49<small>/month</small></div><h3>Hosting &amp; Maintenance</h3><p>Secure hosting, SSL, backups, monitoring and routine website updates so your site stays online and current.</p><p><strong>No long-term contract. Your domain stays yours.</strong></p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="examples" class="section">
+      <div class="container">
+        <div class="eyebrow">Flexible by design</div><h2>Built for businesses like yours.</h2>
+        <div class="examples-grid">
+          <article class="example"><div class="example-art">Home Services</div><div class="example-body"><h3>Home Services</h3><p>HVAC, plumbing, electrical, cleaning, pest control and similar service businesses.</p></div></article>
+          <article class="example"><div class="example-art">Construction &amp; Trades</div><div class="example-body"><h3>Construction &amp; Trades</h3><p>Roofing, construction, landscaping, concrete, painting and specialty trades.</p></div></article>
+          <article class="example"><div class="example-art">Professional Services</div><div class="example-body"><h3>Professional Services</h3><p>Accounting, legal, consulting and other professional service firms.</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="container"><div class="eyebrow">How it works</div><h2>From your business to a new website.</h2><div class="steps">
+        <div class="step"><h3>Tell us about your business</h3><p>Share your services, contact details, photos and what you want customers to know.</p></div>
+        <div class="step"><h3>We build it</h3><p>CajunSites handles the design, content structure, mobile experience and SEO foundation.</p></div>
+        <div class="step"><h3>Review your website</h3><p>You review the site and provide the corrections we need before launch.</p></div>
+        <div class="step"><h3>Go live</h3><p>We connect your domain and handle the technical side from there.</p></div>
+      </div></div>
+    </section>
+
+    <section class="section-tight">
+      <div class="container callout"><div><div class="eyebrow" style="color:#f8c936">Built to be easy</div><h2>Running your business is enough work.</h2><p>You should not have to learn web design, hosting, SSL certificates, DNS or search optimization just to have a professional website.</p><p><strong>You run your business. We'll handle the website.</strong></p></div><div><a class="button" href="/get-started/">Get Started Today</a></div></div>
+    </section>
+
+    <section id="faq" class="section">
+      <div class="container faq"><div><div class="eyebrow">Questions, answered</div><h2>Frequently asked questions.</h2><p>Clear answers before you commit.</p></div><div>{faqs.map(([q,a]) => <details><summary>{q}</summary><p>{a}</p></details>)}</div></div>
+    </section>
+
+    <section class="section cta"><div class="container"><h2>Your business deserves a professional website.</h2><p>$499 to get online. $49/month to keep it there.</p><a class="button" href="/get-started/">Get Started Today</a></div></section>
+  </main>
+
+  <footer class="footer"><div class="container footer-row"><div><strong>CajunSites.com</strong><br/>Websites Built for Small Business</div><div><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><span>© 2026 CajunSites</span></div></div></footer>
+</body>
+</html>
