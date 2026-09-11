@@ -27,5 +27,7 @@ jobs:
           done
       - name: Test Visual Family Engine
         run: node worker/visual-family-engine.test.mjs
+      - name: Test Platform Invariants
+        run: node worker/platform-invariants.test.mjs
       - name: Build Astro site
         run: npm run build
