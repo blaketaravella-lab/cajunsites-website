@@ -10,6 +10,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 
 const clean = (value, max = 2000) => String(value ?? '').trim().slice(0, max);
 const DNS_API = 'https://cajun-sites-dns.vercel.app/api/dns';
+const VERCEL_CONCEPT_PROJECT = 'cajun-sites-prospect-websites';
 
 function slugify(value) {
   return clean(value, 200)
@@ -175,7 +176,8 @@ async function buildConcept(request, env, id) {
     const deployment = await vercelFetch(env, '/v13/deployments', {
       method: 'POST',
       body: JSON.stringify({
-        name: `cajunsites-${slug}`.slice(0,100),
+        name: VERCEL_CONCEPT_PROJECT,
+        project: VERCEL_CONCEPT_PROJECT,
         target: 'production',
         files: [{ file: 'index.html', data: buildConceptHtml(prospect) }],
         projectSettings: { framework: null },
