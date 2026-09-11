@@ -1,5 +1,6 @@
 import baseWorker from './index.js';
 
+// CajunSites admin dashboard wrapper. This comment intentionally forces a fresh production deployment after secret updates.
 const json = (data, status = 200, extraHeaders = {}) => new Response(JSON.stringify(data), {
   status,
   headers: {
