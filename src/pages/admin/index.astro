@@ -46,14 +46,23 @@ import '../../styles/global.css';
     .toolbar input,.toolbar select { border:1px solid #ddd4e2; padding:10px 12px; border-radius:9px; min-height:42px; }
     .table-card { background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
     .table-scroll { overflow:auto; }
-    table { width:100%; border-collapse:collapse; min-width:900px; }
+    table { width:100%; border-collapse:collapse; min-width:1040px; table-layout:fixed; }
     th { text-align:left; padding:12px 14px; background:#fbf9fc; color:#5f5366; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; }
-    td { padding:13px 14px; border-top:1px solid #eee8f1; font-size:.84rem; vertical-align:middle; }
+    td { padding:14px; border-top:1px solid #eee8f1; font-size:.84rem; vertical-align:middle; }
+    th:nth-child(1),td:nth-child(1){width:19%;}
+    th:nth-child(2),td:nth-child(2){width:22%;}
+    th:nth-child(3),td:nth-child(3){width:16%;}
+    th:nth-child(4),td:nth-child(4){width:14%;}
+    th:nth-child(5),td:nth-child(5){width:12%;}
+    th:nth-child(6),td:nth-child(6){width:11%;}
+    th:nth-child(7),td:nth-child(7){width:92px;}
     tr.customer-row { cursor:pointer; }
     tr.customer-row:hover { background:#fcfafc; }
     tr.customer-row.selected { background:#fbf7ee; }
-    .business { font-weight:850; color:var(--purple-950); }
-    .subtle { display:block; color:#7c7083; font-size:.76rem; margin-top:2px; }
+    .business { display:block; font-weight:850; color:var(--purple-950); line-height:1.3; overflow-wrap:anywhere; }
+    .contact-stack,.payment-stack { display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:0; }
+    .contact-stack .contact-name { font-weight:750; color:#2f2535; line-height:1.25; }
+    .subtle { display:block; color:#7c7083; font-size:.76rem; line-height:1.3; overflow-wrap:anywhere; }
     .status { display:inline-flex; align-items:center; padding:5px 9px; border-radius:999px; background:#f2edf7; color:var(--purple-800); font-weight:800; font-size:.72rem; white-space:nowrap; }
     .status.awaiting { background:#fff3cd; color:#795700; }
     .status.ready { background:#e7f7eb; color:#166b36; }
@@ -61,6 +70,8 @@ import '../../styles/global.css';
     .status.live { background:#e8f6ef; color:#0b6842; }
     .dot-label { display:inline-flex; align-items:center; gap:7px; color:#4f4655; white-space:nowrap; }
     .dot-label:before { content:""; width:7px; height:7px; border-radius:50%; background:#1a9a5d; }
+    .view-customer { min-height:36px; padding:0 14px; border-color:#d9cee2; background:#fff; box-shadow:none; }
+    .view-customer:hover { border-color:var(--purple-700); background:#fbf8fd; }
     .detail { margin-top:16px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; }
     .detail-empty { color:var(--muted); text-align:center; padding:48px 20px; }
     .detail-head { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; padding-bottom:18px; border-bottom:1px solid var(--line); }
@@ -238,9 +249,9 @@ import '../../styles/global.css';
       $('customerRows').innerHTML = list.length ? list.map(c => `
         <tr class="customer-row ${state.selectedId===c.id?'selected':''}" data-id="${c.id}">
           <td><span class="business">${esc(c.business_name || 'Unnamed business')}</span></td>
-          <td>${esc(c.customer_name || 'Not provided')}<span class="subtle">${esc(c.email)}</span></td>
+          <td><div class="contact-stack"><span class="contact-name">${esc(c.customer_name || 'Not provided')}</span><span class="subtle">${esc(c.email)}</span></div></td>
           <td>${statusPill(c.status)}</td>
-          <td><span class="dot-label">Paid</span><span class="subtle">$499 launch + $49/mo</span></td>
+          <td><div class="payment-stack"><span class="dot-label">Paid</span><span class="subtle">$499 launch + $49/mo</span></div></td>
           <td>${c.onboarding_completed ? '<span class="dot-label">Complete</span>' : '<span class="subtle">Not submitted</span>'}</td>
           <td>${esc(formatDate(c.created_at))}</td>
           <td><button class="ghost-button view-customer" data-id="${c.id}" type="button">View</button></td>
