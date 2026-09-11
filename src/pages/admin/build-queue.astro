@@ -2,7 +2,7 @@
 import AdminShell from '../../components/AdminShell.astro';
 ---
 <AdminShell title="Build Queue" eyebrow="Fulfillment" description="Move customer sites through production, QA, review, revisions, approval, and launch." active="build">
-  <style>
+  <style is:global>
     .notice{display:none;margin-bottom:12px;padding:11px 13px;border-radius:10px;background:#e8f7ee;color:#17683a}.flow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:14px}.flow-step{padding:11px 9px;border:1px solid #e9e2ed;border-radius:11px;background:#fff;text-align:center;color:#7b6f82;font-size:.66rem;font-weight:850}.flow-step strong{display:block;color:#3f155f;font-size:.9rem;margin-bottom:3px}.next-actions{display:flex;gap:6px;flex-wrap:wrap}.contact-small{color:#8a7e90}.queue-meta{font-size:.7rem;color:#8a7e90}@media(max-width:1050px){.flow{overflow:auto;grid-template-columns:repeat(7,minmax(130px,1fr))}}@media(max-width:620px){.next-actions{min-width:220px}}
   </style>
   <div class="stats-grid"><div class="metric"><strong id="ready">0</strong><span>Ready to Build</span><small>Waiting for production</small></div><div class="metric"><strong id="building">0</strong><span>Building</span><small>Actively in progress</small></div><div class="metric"><strong id="review">0</strong><span>QA / Review</span><small>Validation and feedback</small></div><div class="metric"><strong id="launching">0</strong><span>Launch Ready</span><small>Approved or launching</small></div></div>
