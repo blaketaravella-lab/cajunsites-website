@@ -2,7 +2,7 @@
 import AdminShell from '../../components/AdminShell.astro';
 ---
 <AdminShell title="Sites" eyebrow="Production" description="Manage preview URLs, customer domains, production URLs, templates, and recurring-service sites." active="sites">
-  <style>
+  <style is:global>
     .site-link{display:inline-flex}.editor{margin-top:14px}.site-overview{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}.site-panel{padding:17px 18px}.site-panel h3{margin:0}.site-panel p{margin:4px 0 0;color:#807489;font-size:.76rem}.editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:18px}.editor-grid label{display:grid;gap:5px;font-size:.65rem;font-weight:900;color:#6b5e72;text-transform:uppercase}.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;padding:10px 11px}.editor-grid textarea{min-height:105px;resize:vertical}.full{grid-column:1/-1}.editor-actions{display:flex;gap:8px;flex-wrap:wrap;padding:0 18px 18px}.msg{margin:0 18px 16px;color:#17683a;font-size:.78rem}.contact-small{color:#8a7e90}.domain{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.73rem;color:#4d3a59}@media(max-width:800px){.site-overview,.editor-grid{grid-template-columns:1fr}.full{grid-column:auto}.editor-actions{display:grid}}
   </style>
   <div class="stats-grid"><div class="metric"><strong id="live">0</strong><span>Live</span><small>Production websites</small></div><div class="metric"><strong id="active">0</strong><span>Active Customers</span><small>Recurring service</small></div><div class="metric"><strong id="launching">0</strong><span>Launching</span><small>Cutover in progress</small></div><div class="metric"><strong id="approved">0</strong><span>Approved</span><small>Ready for launch</small></div></div>
