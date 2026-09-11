@@ -233,12 +233,25 @@ async function processSuccessfulCheckout(session, env) {
       'Onboarding: https://cajunsites.com/onboarding/',
     ].join('\n');
 
-    await env.SEND_EMAIL.send({
-      from: 'hello@cajunsites.com',
-      to: 'blaketaravella@gmail.com',
-      subject: `Paid CajunSites customer: ${customer.business_name || customer.email}`,
-      text: internalText,
+    const internalResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'content-type': 'application/json',
+        'idempotency-key': `cajunsites-paid-${customer.stripe_checkout_session_id}`,
+      },
+      body: JSON.stringify({
+        from: 'CajunSites <hello@cajunsites.com>',
+        to: ['blaketaravella@gmail.com'],
+        subject: `Paid CajunSites customer: ${customer.business_name || customer.email}`,
+        text: internalText,
+      }),
     });
+
+    if (!internalResponse.ok) {
+      const errorBody = await internalResponse.text();
+      throw new Error(`Resend paid-customer notification failed (${internalResponse.status}): ${errorBody.slice(0, 1000)}`);
+    }
   }
 
   return { ignored: false, customerId: customer.id };
