@@ -1,0 +1,207 @@
+---
+import AdminShell from '../../components/AdminShell.astro';
+---
+<AdminShell title="Documentation" eyebrow="Knowledge Base" description="Internal operating documentation, standards, architecture, and procedures for CajunSites." active="documentation">
+  <style>
+    .doc-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:18px;align-items:start}.toc{position:sticky;top:86px}.toc h3{margin:0 0 10px;color:var(--purple-950)}.toc a{display:block;padding:8px 10px;border-radius:8px;text-decoration:none;color:#554b5c;font-size:.84rem;font-weight:700}.toc a:hover{background:#f5eff9;color:var(--purple-800)}.docs{display:grid;gap:16px}.doc{scroll-margin-top:90px}.doc h2{font-size:1.45rem;letter-spacing:-.025em;color:var(--purple-950);margin:0 0 12px}.doc h3{font-size:1rem;color:var(--purple-900);margin:20px 0 8px}.doc p,.doc li{font-size:.92rem;line-height:1.6}.doc ul,.doc ol{margin:8px 0 0;padding-left:22px}.doc code{font-size:.82rem;background:#f5f1f7;border:1px solid #ebe3ee;border-radius:6px;padding:2px 6px}.doc table{width:100%;border-collapse:collapse;margin-top:10px}.doc th,.doc td{text-align:left;padding:10px 11px;border:1px solid var(--line);font-size:.84rem;vertical-align:top}.doc th{background:#fbf9fc;color:#554b5c}.callout{border-left:4px solid var(--gold-500);background:#fff9e8;padding:13px 15px;border-radius:10px;margin-top:12px;font-size:.88rem}.status-flow{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.status-flow span{background:#f2edf7;color:var(--purple-800);padding:6px 9px;border-radius:999px;font-size:.76rem;font-weight:800}.search{margin-bottom:16px}.search input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;padding:0 13px}@media(max-width:900px){.doc-layout{grid-template-columns:1fr}.toc{position:static}.toc-links{display:grid;grid-template-columns:1fr 1fr}.doc table{display:block;overflow:auto}}
+  </style>
+
+  <div class="search"><input id="docSearch" type="search" placeholder="Search CajunSites documentation..." aria-label="Search documentation" /></div>
+  <div class="doc-layout">
+    <aside class="admin-card toc">
+      <h3>Contents</h3>
+      <div class="toc-links">
+        <a href="#business">Business Overview</a>
+        <a href="#offer">Offer & Scope</a>
+        <a href="#sales">Sales & Qualification</a>
+        <a href="#lifecycle">Customer Lifecycle</a>
+        <a href="#build-standard">Website Build Standard</a>
+        <a href="#seo">SEO Standard</a>
+        <a href="#maintenance">Maintenance Standard</a>
+        <a href="#architecture">Technical Architecture</a>
+        <a href="#payments">Payments & Billing</a>
+        <a href="#onboarding">Onboarding Automation</a>
+        <a href="#dashboard">Dashboard Operations</a>
+        <a href="#status-model">Status Model</a>
+        <a href="#security">Security & Data Handling</a>
+        <a href="#domains">Domain Policy</a>
+        <a href="#email">Email Policy</a>
+        <a href="#legal">Legal & Tax Notes</a>
+        <a href="#deployment">Deployment Runbook</a>
+        <a href="#qa">QA Checklist</a>
+        <a href="#incident">Incident & Recovery</a>
+      </div>
+    </aside>
+
+    <section class="docs" id="docs">
+      <article class="admin-card doc" id="business" data-doc>
+        <h2>Business Overview</h2>
+        <p><strong>CajunSites</strong> provides standardized, professionally designed websites for small businesses at a clear fixed price. The business is operated by Independent Holdings, LLC, doing business as CajunSites.</p>
+        <table><tbody>
+          <tr><th>Brand</th><td>CajunSites</td></tr>
+          <tr><th>Tagline</th><td>Websites Built for Small Business</td></tr>
+          <tr><th>Primary message</th><td>A professional website. Without the agency price.</td></tr>
+          <tr><th>Primary domain</th><td>cajunsites.com</td></tr>
+          <tr><th>Primary contact</th><td>hello@cajunsites.com</td></tr>
+          <tr><th>Positioning</th><td>Simple, professional, affordable websites with standardized production and predictable recurring maintenance.</td></tr>
+        </tbody></table>
+        <div class="callout">AI is an internal production advantage. Do not market CajunSites as an “AI website” company.</div>
+      </article>
+
+      <article class="admin-card doc" id="offer" data-doc>
+        <h2>Offer & Scope</h2>
+        <h3>Base Package</h3>
+        <table><thead><tr><th>Item</th><th>Price</th><th>Included</th></tr></thead><tbody>
+          <tr><td>Website Design & Launch</td><td>$499 one time</td><td>Up to 5 pages, responsive design, contact or quote form, maps/location as applicable, local SEO foundation, domain connection, SSL, production launch.</td></tr>
+          <tr><td>Hosting & Maintenance</td><td>$49/month</td><td>Hosting, SSL, platform maintenance, routine content changes, form support, basic troubleshooting, backups/recovery as applicable.</td></tr>
+        </tbody></table>
+        <h3>Standard Pages</h3><p>Home, Services, About, Reviews, Contact.</p>
+        <h3>Not Included in Base Package</h3>
+        <ul><li>Ecommerce</li><li>Custom software development</li><li>Advanced integrations</li><li>Unlimited redesigns</li><li>Ongoing SEO campaigns</li><li>Link building</li><li>Monthly content creation</li><li>Google Business Profile management</li><li>Customer email hosting or administration</li></ul>
+      </article>
+
+      <article class="admin-card doc" id="sales" data-doc>
+        <h2>Sales & Qualification</h2>
+        <p>Primary sales motion: identify a qualified small business, generate a personalized preview, contact the owner, show the preview, close the $499 launch plus $49/month service.</p>
+        <h3>Qualification Gate</h3>
+        <p>A prospect is disqualified if its Google Business Profile contains any Website button or URL, including Facebook, Fresha, Square, Booksy, NAPA, corporate sites, an old site, or a poor site.</p>
+        <h3>Preferred Prospect</h3>
+        <ul><li>Owner-operated local service business</li><li>Established Google Business Profile</li><li>Strong public reviews</li><li>No website listed in Google</li><li>Clear services and market area</li><li>Reachable owner or decision maker</li></ul>
+        <h3>Approved Cold Call Direction</h3>
+        <p>“I noticed your business doesn’t have a website, so we mocked one up for you. There’s no charge or obligation. Can I text you the preview?”</p>
+      </article>
+
+      <article class="admin-card doc" id="lifecycle" data-doc>
+        <h2>Customer Lifecycle</h2>
+        <ol><li>Payment & Customer Creation</li><li>Onboarding</li><li>Production Setup</li><li>Website Build</li><li>SEO Foundation</li><li>Internal QA</li><li>Customer Review & Approval</li><li>Domain & Production Launch</li><li>Search Engine Launch</li><li>Customer Launch Handoff</li></ol>
+        <div class="status-flow"><span>Paid - Awaiting Onboarding</span><span>Onboarding Received</span><span>Waiting on Customer</span><span>Ready to Build</span><span>Building</span><span>Internal QA</span><span>Customer Review</span><span>Revisions</span><span>Approved for Launch</span><span>Launching</span><span>Live</span><span>Active Customer</span></div>
+        <p>Exception statuses: <strong>Payment Issue</strong> and <strong>Cancelled</strong>.</p>
+      </article>
+
+      <article class="admin-card doc" id="build-standard" data-doc>
+        <h2>Website Build Standard</h2>
+        <ul><li>Use reusable CajunSites templates and shared components rather than bespoke architecture for every customer.</li><li>Use customer-specific configuration/content to drive the site.</li><li>Mobile-first and responsive on common phone, tablet, and desktop widths.</li><li>Keep navigation simple and conversion-oriented.</li><li>Use real customer-provided facts only.</li><li>Do not invent years in business, licenses, insurance, certifications, awards, services, testimonials, guarantees, or 24/7 availability.</li><li>Preserve customer ownership of their domain.</li><li>Use accessible semantic structure, readable contrast, useful alt text, and usable forms.</li><li>Keep production sites fast, simple, and maintainable.</li></ul>
+      </article>
+
+      <article class="admin-card doc" id="seo" data-doc>
+        <h2>Local SEO Foundation Standard</h2>
+        <p>Customer-facing description: <strong>Local SEO Foundation Included</strong> or <strong>Search-engine optimized from day one.</strong></p>
+        <h3>Included</h3>
+        <ul><li>Real service and location keyword targeting</li><li>Unique page titles and meta descriptions</li><li>Logical H1/H2 heading structure</li><li>Natural service-area references</li><li>Image alt text</li><li>Clean URLs</li><li>Internal linking</li><li>Mobile and performance optimization</li><li>HTTPS</li><li>XML sitemap and robots.txt</li><li>Appropriate structured data/schema</li><li>Google Search Console verification and sitemap submission when applicable</li><li>Google Business Profile linking when available</li></ul>
+        <h3>Not Included</h3><p>Ranking guarantees, paid link building, spam location pages, monthly SEO content, ongoing GBP management, or an ongoing SEO campaign under the $49/month plan.</p>
+      </article>
+
+      <article class="admin-card doc" id="maintenance" data-doc>
+        <h2>Hosting & Maintenance Standard</h2>
+        <p>The $49/month recurring service includes hosting, SSL, availability, platform/security maintenance, backups/recovery as applicable, domain connection support, form support, routine content changes, basic troubleshooting, and compatibility maintenance.</p>
+        <table><thead><tr><th>Request Type</th><th>Treatment</th></tr></thead><tbody>
+          <tr><td>Routine update to existing text, image, phone, hours, or services</td><td>Included</td></tr>
+          <tr><td>Repair caused by CajunSites platform or implementation</td><td>Included</td></tr>
+          <tr><td>New page, new feature, major redesign, integration, or custom project</td><td>Quote separately</td></tr>
+        </tbody></table>
+      </article>
+
+      <article class="admin-card doc" id="architecture" data-doc>
+        <h2>Technical Architecture</h2>
+        <table><thead><tr><th>Function</th><th>Platform</th></tr></thead><tbody>
+          <tr><td>Registrar, DNS, CDN, SSL, Worker runtime, D1</td><td>Cloudflare</td></tr>
+          <tr><td>Static website framework</td><td>Astro</td></tr>
+          <tr><td>Source control</td><td>GitHub</td></tr>
+          <tr><td>Payments and subscriptions</td><td>Stripe</td></tr>
+          <tr><td>Customer transactional email</td><td>Resend</td></tr>
+          <tr><td>Lead/onboarding internal email</td><td>Cloudflare Email Service binding</td></tr>
+          <tr><td>Form abuse protection</td><td>Cloudflare Turnstile</td></tr>
+          <tr><td>Bookkeeping</td><td>Zoho Books Free</td></tr>
+          <tr><td>Internal customer/fulfillment data</td><td>Cloudflare D1</td></tr>
+        </tbody></table>
+        <p>Production Worker: <code>cajunsites-website</code>. D1 database: <code>cajunsites-production</code>.</p>
+      </article>
+
+      <article class="admin-card doc" id="payments" data-doc>
+        <h2>Payments & Billing</h2>
+        <p>Stripe is configured under Independent Holdings, LLC with CajunSites as the public business name.</p>
+        <ul><li>$499 Website Design & Launch, one time.</li><li>$49 Hosting & Maintenance, monthly recurring.</li><li>Current checkout charges $548 at purchase, consisting of the $499 launch fee plus the first $49 month.</li><li>Stripe terms acceptance is required at checkout.</li><li>Stripe Tax remains disabled pending final tax treatment review.</li><li>Managed Payments is disabled.</li><li>Promotion codes are disabled for the standard link unless intentionally changed later.</li></ul>
+        <p>Live payment link ID: <code>plink_1UETwWINepSxCPJz8VjC4MSO</code>.</p>
+      </article>
+
+      <article class="admin-card doc" id="onboarding" data-doc>
+        <h2>Onboarding Automation</h2>
+        <p>Successful Stripe checkout events trigger the CajunSites Worker. The Worker verifies the Stripe signature and Payment Link, creates the D1 customer record, sends the customer welcome email, and sends the internal paid-customer notification.</p>
+        <p>The customer welcome email contains a customer-specific signed onboarding link. The token is an HMAC tied to the Stripe Checkout Session ID. The onboarding submission verifies the token and exact customer before accepting the form.</p>
+        <p>After a successful onboarding submission, D1 automatically changes the customer from <strong>Paid - Awaiting Onboarding</strong> to <strong>Onboarding Received</strong> and stores the onboarding answers for the admin dashboard.</p>
+        <div class="callout">Never ask a customer to use the generic onboarding URL. Paid customers should use the signed onboarding link from their welcome email.</div>
+      </article>
+
+      <article class="admin-card doc" id="dashboard" data-doc>
+        <h2>Dashboard Operations</h2>
+        <p>The internal dashboard is available at <code>/admin/</code> and is protected by a Cloudflare runtime secret named <code>ADMIN_DASHBOARD_PASSWORD</code>. The browser receives a secure HttpOnly admin session cookie after successful login.</p>
+        <h3>Dashboard Areas</h3>
+        <ul><li>Overview: priority work, workload, recent activity</li><li>Customers: customer/payment/onboarding detail and lifecycle actions</li><li>Onboarding: intake review and readiness decisions</li><li>Build Queue: fulfillment stages and next actions</li><li>Sites: preview and production URLs, domain, template, site notes</li><li>Activity: operational audit history</li><li>Templates: standardized production foundations</li><li>Analytics: customer count, launch revenue, MRR, funnel</li><li>Documentation: internal standards and runbooks</li><li>Settings: platform configuration health</li></ul>
+      </article>
+
+      <article class="admin-card doc" id="status-model" data-doc>
+        <h2>Status Model & Allowed Progression</h2>
+        <table><thead><tr><th>Current</th><th>Normal Next Status</th></tr></thead><tbody>
+          <tr><td>Paid - Awaiting Onboarding</td><td>Onboarding Received, automated by onboarding submission</td></tr>
+          <tr><td>Onboarding Received</td><td>Waiting on Customer or Ready to Build</td></tr>
+          <tr><td>Waiting on Customer</td><td>Onboarding Received</td></tr>
+          <tr><td>Ready to Build</td><td>Building</td></tr>
+          <tr><td>Building</td><td>Internal QA</td></tr>
+          <tr><td>Internal QA</td><td>Building or Customer Review</td></tr>
+          <tr><td>Customer Review</td><td>Revisions or Approved for Launch</td></tr>
+          <tr><td>Revisions</td><td>Internal QA or Customer Review</td></tr>
+          <tr><td>Approved for Launch</td><td>Launching</td></tr>
+          <tr><td>Launching</td><td>Live</td></tr>
+          <tr><td>Live</td><td>Active Customer</td></tr>
+        </tbody></table>
+      </article>
+
+      <article class="admin-card doc" id="security" data-doc>
+        <h2>Security & Data Handling</h2>
+        <ul><li>Secrets are stored as Cloudflare Worker runtime secrets, not in GitHub.</li><li>Do not paste Stripe webhook secrets, Resend API keys, or dashboard passwords into tickets, documentation, chat, or source code.</li><li>Webhook requests must pass Stripe HMAC verification and timestamp tolerance checks.</li><li>Customer onboarding URLs are signed.</li><li>Turnstile protects public lead and onboarding forms.</li><li>Dashboard pages are marked <code>noindex, nofollow</code>.</li><li>Admin session cookies are HttpOnly, Secure, and SameSite=Strict.</li><li>Do not store Turnstile response tokens or onboarding HMAC tokens in the onboarding payload.</li><li>Customer content should be limited to information needed to build and support the site.</li></ul>
+      </article>
+
+      <article class="admin-card doc" id="domains" data-doc>
+        <h2>Domain Policy</h2>
+        <ul><li>The customer owns the domain.</li><li>CajunSites may assist with connection, DNS, SSL, and launch.</li><li>Do not make domain ownership contingent on continuing CajunSites service.</li><li>Do not intentionally create domain-lock-in.</li><li>When a customer already owns a domain, document the registrar/provider and required access during onboarding.</li></ul>
+      </article>
+
+      <article class="admin-card doc" id="email" data-doc>
+        <h2>Email Policy</h2>
+        <p>CajunSites does not offer or administer customer business email as part of the standard service.</p>
+        <ul><li><code>hello@cajunsites.com</code> is the CajunSites public sender/address.</li><li>Resend handles customer transactional messages.</li><li>Cloudflare Email Routing forwards CajunSites inbound mail as configured.</li><li>Customer email migrations, mailbox support, Microsoft 365, Google Workspace, and similar services are outside the standard product.</li></ul>
+      </article>
+
+      <article class="admin-card doc" id="legal" data-doc>
+        <h2>Legal & Tax Notes</h2>
+        <ul><li>Terms of Service: <code>https://cajunsites.com/terms/</code></li><li>Privacy Policy: <code>https://cajunsites.com/privacy/</code></li><li>Terms and Privacy identify Independent Holdings, LLC, doing business as CajunSites.</li><li>Customer owns supplied content and receives the right to use the completed website.</li><li>CajunSites retains reusable templates, frameworks, software, platform components, and production systems.</li><li>No SEO, traffic, ranking, or business-result guarantees.</li><li>Louisiana law governs the Terms.</li><li>Stripe Tax is currently off pending final Louisiana tax treatment determination.</li></ul>
+        <div class="callout">Internal documentation is operational guidance, not a substitute for attorney or CPA review.</div>
+      </article>
+
+      <article class="admin-card doc" id="deployment" data-doc>
+        <h2>Deployment Runbook</h2>
+        <ol><li>Make and review the source change in GitHub.</li><li>Confirm Astro build/deployment succeeds.</li><li>Confirm Worker routes still handle <code>/api/*</code>.</li><li>Verify <code>https://cajunsites.com/</code> and any changed page.</li><li>For Worker changes, verify the relevant API endpoint directly.</li><li>For dashboard changes, verify authentication and customer retrieval.</li><li>For database-dependent features, apply the tracked D1 migration to <code>cajunsites-production</code>.</li><li>Run a controlled test before using a new lifecycle action with a real customer.</li></ol>
+        <p>Do not edit production secrets into <code>wrangler.jsonc</code>. Use Cloudflare Variables and Secrets.</p>
+      </article>
+
+      <article class="admin-card doc" id="qa" data-doc>
+        <h2>Internal Website QA Checklist</h2>
+        <ul><li>Business name and contact information correct</li><li>No invented claims or unsupported credentials</li><li>All requested pages present</li><li>Navigation and CTAs work</li><li>Contact/quote form works end to end</li><li>Phone numbers and email links work</li><li>Mobile layout checked</li><li>No horizontal overflow or clipped content</li><li>Images optimized and appropriate</li><li>Title/meta/H1 structure reviewed</li><li>Canonical URL correct</li><li>robots.txt and sitemap appropriate</li><li>Structured data uses only true customer facts</li><li>HTTPS active</li><li>Preview approved before production cutover</li><li>Production domain validated after launch</li></ul>
+      </article>
+
+      <article class="admin-card doc" id="incident" data-doc>
+        <h2>Incident & Recovery</h2>
+        <h3>Customer Site Issue</h3>
+        <ol><li>Confirm whether issue is site content, DNS, platform, form, or external dependency.</li><li>Check the public site and preview/deployment state.</li><li>Confirm Cloudflare DNS and SSL if the site is unreachable.</li><li>Review recent deployment/activity history.</li><li>Restore or redeploy the last known-good version when appropriate.</li><li>Document the action in the customer record/internal notes.</li></ol>
+        <h3>Payment or Onboarding Issue</h3>
+        <ol><li>Confirm Stripe event/payment state.</li><li>Confirm customer row exists in D1.</li><li>Confirm welcome email state.</li><li>For onboarding, confirm customer used the signed welcome-email URL.</li><li>Review Worker logs before modifying production data manually.</li></ol>
+      </article>
+    </section>
+  </div>
+</AdminShell>
+
+<script is:inline>
+const input=document.getElementById('docSearch');
+const docs=[...document.querySelectorAll('[data-doc]')];
+input?.addEventListener('input',()=>{const q=input.value.trim().toLowerCase();docs.forEach(d=>{d.style.display=!q||d.textContent.toLowerCase().includes(q)?'block':'none'})});
+</script>
