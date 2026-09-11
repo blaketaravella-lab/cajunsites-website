@@ -1,5 +1,4 @@
 import appWorker from './app.js';
-import { pbkdf2Sync } from 'node:crypto';
 
 const ADMIN_COOKIE = 'cajunsites_admin';
 const ADMIN_SESSION_SECONDS = 60 * 60 * 12;
@@ -41,9 +40,21 @@ async function sha256Hex(value) {
   return bytesToHex(digest);
 }
 
-async function passwordHash(password, saltHex) {
-  const salt = Buffer.from(saltHex, 'hex');
-  return pbkdf2Sync(String(password), salt, 210000, 32, 'sha256').toString('hex');
+async function passwordHash(password, saltHex, env) {
+  if (!env.ADMIN_DASHBOARD_PASSWORD) throw new Error('Authentication pepper is not configured');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.ADMIN_DASHBOARD_PASSWORD),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${saltHex}:${String(password)}`),
+  );
+  return bytesToHex(signature);
 }
 
 async function createSession(userId, env) {
@@ -78,7 +89,7 @@ async function handleLogin(request, env) {
       }
 
       const salt = randomHex(16);
-      const hash = await passwordHash(password, salt);
+      const hash = await passwordHash(password, salt, env);
       await env.DB.prepare(
         'INSERT INTO internal_users (email,name,role,password_salt,password_hash,is_active,created_at,updated_at) VALUES (?,?,?,?,?,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)'
       ).bind(email, clean(data.name || BOOTSTRAP_OWNER_NAME, 160), 'owner', salt, hash).run();
@@ -87,7 +98,7 @@ async function handleLogin(request, env) {
     const user = await env.DB.prepare('SELECT * FROM internal_users WHERE email=? LIMIT 1').bind(email).first();
     if (!user || !user.is_active) return json({ ok: false, error: 'Incorrect email or password.' }, 401);
 
-    const hash = await passwordHash(password, user.password_salt);
+    const hash = await passwordHash(password, user.password_salt, env);
     if (!constantTimeEqual(hash, user.password_hash)) {
       return json({ ok: false, error: 'Incorrect email or password.' }, 401);
     }
@@ -107,10 +118,10 @@ async function handleLogin(request, env) {
     if (/no such table/i.test(message)) {
       return json({ ok: false, error: 'Internal user database setup is incomplete.' }, 503);
     }
-    if (/PBKDF2|pbkdf2|crypto/i.test(message)) {
+    if (/pepper|HMAC|importKey|sign/i.test(message)) {
       return json({ ok: false, error: 'Password security service failed.' }, 503);
     }
-    return json({ ok: false, error: 'Internal login service failed.' }, 500);
+    return json({ ok: false, error: `Internal login service failed: ${message.slice(0, 120)}` }, 500);
   }
 }
 
