@@ -31,5 +31,7 @@ jobs:
         run: node worker/platform-invariants.test.mjs
       - name: Test Mobile Responsiveness Invariants
         run: node worker/mobile-invariants.test.mjs
+      - name: Test Prospect Enrichment Invariants
+        run: node worker/prospect-enrichment.test.mjs
       - name: Build Astro site
         run: npm run build
