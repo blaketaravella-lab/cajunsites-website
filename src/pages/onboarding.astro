@@ -1,0 +1,110 @@
+---
+import '../styles/global.css';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Customer Onboarding | CajunSites</title>
+  <meta name="description" content="CajunSites customer onboarding form for gathering the information needed to build and launch your website." />
+  <link rel="canonical" href="https://cajunsites.com/onboarding/" />
+  <meta name="robots" content="noindex, nofollow" />
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+<header class="header"><div class="container nav"><a class="brand" href="/"><span class="wordmark">Cajun<span>Sites</span></span><small>Websites Built for Small Business</small></a><nav class="navlinks"><a href="/">Home</a></nav></div></header>
+<main>
+<section class="section"><div class="container"><div class="form-card">
+<div class="eyebrow">Customer Onboarding</div>
+<h1 style="font-size:clamp(2.7rem,6vw,4.8rem)">Tell us everything we need to build your website.</h1>
+<p>Complete as much as you can. If something does not apply, leave it blank. For logos and photos, paste a share link from Google Drive, Dropbox, OneDrive, iCloud, or another file-sharing service.</p>
+
+<form id="onboarding-form" method="post" action="/api/onboarding" class="form-grid">
+<div class="full"><h2>Business Details</h2></div>
+<div><label for="contact_name">Your name</label><input id="contact_name" name="contact_name" autocomplete="name" required /></div>
+<div><label for="business_name">Business name</label><input id="business_name" name="business_name" autocomplete="organization" required /></div>
+<div><label for="business_type">Business type</label><input id="business_type" name="business_type" placeholder="Plumbing, salon, law firm..." /></div>
+<div><label for="years_business">Years in business</label><input id="years_business" name="years_business" inputmode="numeric" /></div>
+<div class="full"><label for="business_description">Describe your business</label><textarea id="business_description" name="business_description" placeholder="What should a new customer understand about your business?"></textarea></div>
+<div class="full"><label for="unique_points">What makes your business different?</label><textarea id="unique_points" name="unique_points" placeholder="Experience, specialties, guarantees, family-owned, certifications, approach, etc."></textarea></div>
+
+<div class="full"><h2>Services &amp; Service Areas</h2></div>
+<div class="full"><label for="services">Services to feature</label><textarea id="services" name="services" required placeholder="List the services you want shown on the website. Include short descriptions if helpful."></textarea></div>
+<div class="full"><label for="service_areas">Service areas</label><textarea id="service_areas" name="service_areas" placeholder="Cities, parishes/counties, neighborhoods, or regions you serve."></textarea></div>
+<div class="full"><label for="priority_service">Most important service or customer type</label><input id="priority_service" name="priority_service" placeholder="What should the website emphasize most?" /></div>
+
+<div class="full"><h2>Hours &amp; Contact Information</h2></div>
+<div><label for="public_phone">Public phone number</label><input id="public_phone" name="public_phone" type="tel" autocomplete="tel" /></div>
+<div><label for="public_email">Public email address</label><input id="public_email" name="public_email" type="email" autocomplete="email" /></div>
+<div class="full"><label for="business_address">Business address</label><input id="business_address" name="business_address" autocomplete="street-address" placeholder="Leave blank if you do not want an address displayed." /></div>
+<div class="full"><label for="hours">Business hours</label><textarea id="hours" name="hours" placeholder="Example: Mon-Fri 8 AM-5 PM; Sat by appointment; Sun closed"></textarea></div>
+<div class="full"><label for="contact_preference">How should website visitors contact you?</label><textarea id="contact_preference" name="contact_preference" placeholder="Call, contact form, quote request, appointment request, email, etc."></textarea></div>
+
+<div class="full"><h2>Domain &amp; Existing Website</h2></div>
+<div><label for="domain_name">Domain name</label><input id="domain_name" name="domain_name" placeholder="example.com or Not purchased yet" /></div>
+<div><label for="domain_provider">Domain provider</label><input id="domain_provider" name="domain_provider" placeholder="Cloudflare, GoDaddy, Namecheap, etc." /></div>
+<div class="full"><label for="existing_website">Existing website URL</label><input id="existing_website" name="existing_website" type="url" placeholder="https://..." /></div>
+<div class="full"><label for="existing_content">Existing website content to reuse</label><textarea id="existing_content" name="existing_content" placeholder="Tell us what should be carried over, or paste links to documents/pages containing content we should reuse."></textarea></div>
+
+<div class="full"><h2>Logo, Photos &amp; Brand Assets</h2></div>
+<div class="full"><label for="logo_link">Logo / brand files share link</label><input id="logo_link" name="logo_link" type="url" placeholder="Google Drive, Dropbox, OneDrive, iCloud, etc." /></div>
+<div class="full"><label for="photos_link">Business photos share link</label><input id="photos_link" name="photos_link" type="url" placeholder="Share a folder containing your preferred photos." /></div>
+<div class="full"><label for="photo_notes">Photo notes</label><textarea id="photo_notes" name="photo_notes" placeholder="Tell us which photos are most important or where certain photos should be used."></textarea></div>
+
+<div class="full"><h2>Social Profiles &amp; Google Business Profile</h2></div>
+<div><label for="facebook">Facebook</label><input id="facebook" name="facebook" type="url" placeholder="https://facebook.com/..." /></div>
+<div><label for="instagram">Instagram</label><input id="instagram" name="instagram" type="url" placeholder="https://instagram.com/..." /></div>
+<div><label for="linkedin">LinkedIn</label><input id="linkedin" name="linkedin" type="url" placeholder="https://linkedin.com/..." /></div>
+<div><label for="other_social">Other social profile</label><input id="other_social" name="other_social" type="url" placeholder="TikTok, YouTube, X, etc." /></div>
+<div class="full"><label for="google_business">Google Business Profile / Google Maps link</label><input id="google_business" name="google_business" type="url" placeholder="Paste your Google Business Profile or Maps link." /></div>
+
+<div class="full"><h2>Reviews &amp; Testimonials</h2></div>
+<div class="full"><label for="testimonials">Testimonials you authorize us to use</label><textarea id="testimonials" name="testimonials" placeholder="Paste approved testimonials here. Include the customer's name/company only if you have permission to display it."></textarea></div>
+<div class="full"><label for="reviews_link">Public review page</label><input id="reviews_link" name="reviews_link" type="url" placeholder="Google reviews, Facebook reviews, etc." /></div>
+
+<div class="full"><h2>Design Preferences</h2></div>
+<div class="full"><label for="design_style">How should the website feel?</label><textarea id="design_style" name="design_style" placeholder="Professional, modern, bold, traditional, upscale, friendly, simple, industrial, etc."></textarea></div>
+<div><label for="brand_colors">Brand colors</label><input id="brand_colors" name="brand_colors" placeholder="Colors or hex codes, if known" /></div>
+<div><label for="avoid_colors">Colors to avoid</label><input id="avoid_colors" name="avoid_colors" /></div>
+<div class="full"><label for="example_sites">Websites you like</label><textarea id="example_sites" name="example_sites" placeholder="Paste links and tell us what you like about them."></textarea></div>
+<div class="full"><label for="design_avoid">Anything you do not want?</label><textarea id="design_avoid" name="design_avoid" placeholder="Styles, wording, images, layouts, or other things to avoid."></textarea></div>
+
+<div class="full"><h2>Final Notes</h2></div>
+<div class="full"><label for="additional_notes">Anything else we should know?</label><textarea id="additional_notes" name="additional_notes" placeholder="Special requests, deadlines, compliance requirements, additional links, or anything else that will help us build your site."></textarea></div>
+<div class="full"><label style="display:flex;gap:.7rem;align-items:flex-start"><input type="checkbox" name="accuracy_confirmed" value="yes" required style="width:auto;margin-top:.3rem" /> <span>I confirm that the information and materials I provided are accurate to the best of my knowledge and that I have permission to provide them to CajunSites for use on my website.</span></label></div>
+
+<div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off" /></div>
+<div class="full"><div class="cf-turnstile" data-sitekey="0x4AAAAAAEq39H8cpxuqOQWG" data-action="onboarding"></div></div>
+<div class="full"><button id="submit-button" class="button" type="submit">Submit Onboarding Information</button><p id="form-status" class="microcopy" role="status" aria-live="polite">We'll review your information and contact you if we need anything else.</p></div>
+</form>
+</div></div></section>
+</main>
+<footer class="footer"><div class="container footer-row"><div><strong>CajunSites.com</strong></div><div><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></div></div></footer>
+<script is:inline>
+const form = document.getElementById('onboarding-form');
+const button = document.getElementById('submit-button');
+const status = document.getElementById('form-status');
+form?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  button.disabled = true;
+  button.textContent = 'Submitting...';
+  status.textContent = 'Sending your onboarding information...';
+  try {
+    const response = await fetch('/api/onboarding', { method: 'POST', body: new FormData(form), headers: { 'Accept': 'application/json' } });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to submit onboarding information.');
+    form.reset();
+    if (window.turnstile) window.turnstile.reset();
+    status.textContent = 'Thanks! We received your onboarding information and will review it next.';
+    button.textContent = 'Information Submitted';
+  } catch (error) {
+    if (window.turnstile) window.turnstile.reset();
+    status.textContent = error.message || 'We could not submit your information. Please try again.';
+    button.disabled = false;
+    button.textContent = 'Submit Onboarding Information';
+  }
+});
+</script>
+</body>
+</html>
