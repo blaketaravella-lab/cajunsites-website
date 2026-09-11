@@ -24,11 +24,28 @@ async function cleanupProspect(env,p){
   return result;
 }
 
-export default{async fetch(request,env){const url=new URL(request.url),m=url.pathname.match(/^\/api\/admin\/prospects\/(\d+)$/);if(m&&request.method==='DELETE'){
-  if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503);
-  const user=await currentUser(request,env);if(!user)return json({ok:false,error:'Authentication required.'},401);if(!['owner','admin'].includes(user.role))return json({ok:false,error:'Admin access is required to remove prospects.'},403);
-  const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(Number(m[1])).first();if(!p)return json({ok:false,error:'Prospect not found.'},404);
-  if(p.customer_id)return json({ok:false,error:'This prospect is linked to a customer and cannot be removed from the prospect pipeline. Manage the customer record instead.'},409);
-  try{const cleanup=await cleanupProspect(env,p);const response=await conversionWorker.fetch(request,env);if(!response.ok)return response;const data=await response.json().catch(()=>({ok:true}));return json({...data,cleanup});}catch(e){console.error('Prospect cleanup failed',e);return json({ok:false,error:`Prospect was not removed because related asset cleanup failed: ${clean(e?.message||e,500)}`},502)}
+async function protectAdminPage(request,env,url){
+  if(!url.pathname.startsWith('/admin'))return null;
+  if(url.pathname==='/admin/login' || url.pathname==='/admin/login/')return env.ASSETS.fetch(request);
+  const user=await currentUser(request,env);
+  if(user)return env.ASSETS.fetch(request);
+  const login=new URL('/admin/login/',url.origin);
+  login.searchParams.set('next',url.pathname+url.search);
+  return Response.redirect(login.toString(),302);
 }
-return conversionWorker.fetch(request,env)}};
+
+export default{async fetch(request,env){
+  const url=new URL(request.url);
+  if(request.method==='GET'&&url.pathname.startsWith('/admin')){
+    const protectedResponse=await protectAdminPage(request,env,url);
+    if(protectedResponse)return protectedResponse;
+  }
+  const m=url.pathname.match(/^\/api\/admin\/prospects\/(\d+)$/);if(m&&request.method==='DELETE'){
+    if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503);
+    const user=await currentUser(request,env);if(!user)return json({ok:false,error:'Authentication required.'},401);if(!['owner','admin'].includes(user.role))return json({ok:false,error:'Admin access is required to remove prospects.'},403);
+    const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(Number(m[1])).first();if(!p)return json({ok:false,error:'Prospect not found.'},404);
+    if(p.customer_id)return json({ok:false,error:'This prospect is linked to a customer and cannot be removed from the prospect pipeline. Manage the customer record instead.'},409);
+    try{const cleanup=await cleanupProspect(env,p);const response=await conversionWorker.fetch(request,env);if(!response.ok)return response;const data=await response.json().catch(()=>({ok:true}));return json({...data,cleanup});}catch(e){console.error('Prospect cleanup failed',e);return json({ok:false,error:`Prospect was not removed because related asset cleanup failed: ${clean(e?.message||e,500)}`},502)}
+  }
+  return conversionWorker.fetch(request,env)
+}};
