@@ -1,7 +1,7 @@
 ---
 import AdminShell from '../../components/AdminShell.astro';
 ---
-<AdminShell title="Activity" eyebrow="Operations History" description="Review lifecycle changes, onboarding receipts, internal notes, site updates, concept builds, and prospect conversions." active="activity">
+<AdminShell title="Activity" eyebrow="Operations History" description="Review lifecycle changes, onboarding receipts, internal notes, site updates, business research, concept builds, and prospect conversions." active="activity">
   <style>
     .time{white-space:nowrap;color:var(--muted);font-size:.78rem}.business-email{color:var(--muted)}.description{line-height:1.5}
   </style>
@@ -9,8 +9,8 @@ import AdminShell from '../../components/AdminShell.astro';
 </AdminShell>
 <script is:inline>
 const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const label=t=>({'status_changed':'Status Changed','onboarding_received':'Onboarding Received','note_added':'Note Added','site_updated':'Site Updated','prospect_updated':'Prospect Updated','concept_build':'Concept Build','prospect_converted':'Prospect Converted'}[t]||String(t||'Activity').replaceAll('_',' '));
-const cls=t=>t==='prospect_converted'?'green':t==='concept_build'?'gold':t==='onboarding_received'?'green':'gray';
+const label=t=>({'status_changed':'Status Changed','onboarding_received':'Onboarding Received','note_added':'Note Added','site_updated':'Site Updated','prospect_updated':'Prospect Updated','prospect_research':'Business Research','concept_build':'Concept Build','prospect_converted':'Prospect Converted'}[t]||String(t||'Activity').replaceAll('_',' '));
+const cls=t=>t==='prospect_converted'?'green':t==='concept_build'?'gold':t==='prospect_research'?'gold':t==='onboarding_received'?'green':'gray';
 async function load(){try{const d=await window.adminApi('/api/admin/activity');const a=d.activity||[];document.getElementById('rows').innerHTML=a.length?a.map(x=>`<tr><td class="time">${e(x.created_at)}</td><td><strong>${e(x.business_name||'System')}</strong>${x.email?`<br><small class="business-email">${e(x.email)}</small>`:''}</td><td><span class="pill ${cls(x.event_type)}">${e(label(x.event_type))}</span></td><td class="description">${e(x.description)}</td></tr>`).join(''):`<tr><td colspan="4" class="empty">${d.storageReady===false?'Apply the admin operations database migration to enable activity history.':'No activity has been recorded yet.'}</td></tr>`}catch{}}
 window.addEventListener('admin-authenticated',load);load();
 </script>
