@@ -1,0 +1,14 @@
+---
+import AdminShell from '../../components/AdminShell.astro';
+---
+<AdminShell title="Build Queue" eyebrow="Fulfillment" description="See every customer that is ready to build or actively moving through production." active="build">
+  <div class="admin-grid" style="margin-bottom:14px"><div class="metric"><strong id="ready">0</strong><span>Ready to Build</span></div><div class="metric"><strong id="building">0</strong><span>Building</span></div><div class="metric"><strong id="review">0</strong><span>QA / Review / Revisions</span></div></div>
+  <div class="admin-card" style="padding:0;overflow:auto"><table class="admin-table"><thead><tr><th>Business</th><th>Status</th><th>Contact</th><th>Created</th><th>Next Step</th></tr></thead><tbody id="rows"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table></div>
+</AdminShell>
+<script is:inline>
+const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const stages=['Ready to Build','Building','Internal QA','Customer Review','Revisions','Approved for Launch','Launching'];
+const next=s=>({ 'Ready to Build':'Start build','Building':'Complete build','Internal QA':'Finish QA','Customer Review':'Await approval','Revisions':'Complete revisions','Approved for Launch':'Launch site','Launching':'Validate production' }[s]||'Review');
+async function load(){try{const d=await window.adminApi('/api/admin/customers');const c=(d.customers||[]).filter(x=>stages.includes(x.status));document.getElementById('ready').textContent=c.filter(x=>x.status==='Ready to Build').length;document.getElementById('building').textContent=c.filter(x=>x.status==='Building').length;document.getElementById('review').textContent=c.filter(x=>['Internal QA','Customer Review','Revisions'].includes(x.status)).length;document.getElementById('rows').innerHTML=c.length?c.map(x=>`<tr><td><strong>${e(x.business_name||'Unnamed business')}</strong></td><td><span class="pill ${x.status==='Ready to Build'?'green':''}">${e(x.status)}</span></td><td>${e(x.customer_name||'Not provided')}<br><small>${e(x.email)}</small></td><td>${e(x.created_at||'')}</td><td>${e(next(x.status))}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">The build queue is empty.</td></tr>'}catch{}}
+window.addEventListener('admin-authenticated',load);load();
+</script>
