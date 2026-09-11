@@ -1,0 +1,12 @@
+---
+import AdminShell from '../../components/AdminShell.astro';
+---
+<AdminShell title="Sites" eyebrow="Production" description="Track launched customer websites and active recurring-service customers." active="sites">
+  <div class="admin-grid" style="margin-bottom:14px"><div class="metric"><strong id="live">0</strong><span>Live</span></div><div class="metric"><strong id="active">0</strong><span>Active Customers</span></div><div class="metric"><strong id="launching">0</strong><span>Launching</span></div></div>
+  <div class="admin-card" style="padding:0;overflow:auto"><table class="admin-table"><thead><tr><th>Business</th><th>Status</th><th>Customer</th><th>Monthly Service</th><th>Site</th></tr></thead><tbody id="rows"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table></div>
+</AdminShell>
+<script is:inline>
+const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function load(){try{const d=await window.adminApi('/api/admin/customers');const all=d.customers||[];document.getElementById('live').textContent=all.filter(x=>x.status==='Live').length;document.getElementById('active').textContent=all.filter(x=>x.status==='Active Customer').length;document.getElementById('launching').textContent=all.filter(x=>x.status==='Launching').length;const c=all.filter(x=>['Launching','Live','Active Customer'].includes(x.status));document.getElementById('rows').innerHTML=c.length?c.map(x=>`<tr><td><strong>${e(x.business_name||'Unnamed business')}</strong></td><td><span class="pill green">${e(x.status)}</span></td><td>${e(x.customer_name||'Not provided')}<br><small>${e(x.email)}</small></td><td>$49 / month</td><td><span style="color:#786c80">Site URL will appear after provisioning</span></td></tr>`).join(''):'<tr><td colspan="5" class="empty">No production sites yet.</td></tr>'}catch{}}
+window.addEventListener('admin-authenticated',load);load();
+</script>
