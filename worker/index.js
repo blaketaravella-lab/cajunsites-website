@@ -84,13 +84,7 @@ function constantTimeStringEqual(left, right) {
   return mismatch === 0;
 }
 
-async function verifyStripeWebhookSignature(rawBody, signatureHeader, secret) {
-  const { timestamp, signatures } = parseStripeSignature(signatureHeader);
-  if (!Number.isFinite(timestamp) || !signatures.length) return false;
-
-  const age = Math.abs(Math.floor(Date.now() / 1000) - timestamp);
-  if (age > STRIPE_SIGNATURE_TOLERANCE_SECONDS) return false;
-
+async function hmacHex(secret, value) {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
@@ -98,12 +92,33 @@ async function verifyStripeWebhookSignature(rawBody, signatureHeader, secret) {
     false,
     ['sign'],
   );
+  const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value));
+  return hexFromBytes(digest);
+}
 
-  const signedPayload = `${timestamp}.${rawBody}`;
-  const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload));
-  const expected = hexFromBytes(digest);
+async function createOnboardingToken(checkoutSessionId, secret) {
+  return hmacHex(secret, `cajunsites:onboarding:${checkoutSessionId}`);
+}
 
+async function verifyStripeWebhookSignature(rawBody, signatureHeader, secret) {
+  const { timestamp, signatures } = parseStripeSignature(signatureHeader);
+  if (!Number.isFinite(timestamp) || !signatures.length) return false;
+
+  const age = Math.abs(Math.floor(Date.now() / 1000) - timestamp);
+  if (age > STRIPE_SIGNATURE_TOLERANCE_SECONDS) return false;
+
+  const expected = await hmacHex(secret, `${timestamp}.${rawBody}`);
   return signatures.some((signature) => constantTimeStringEqual(expected, signature));
+}
+
+async function getOnboardingUrl(env, checkoutSessionId) {
+  if (!env.STRIPE_WEBHOOK_SECRET) throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
+  const token = await createOnboardingToken(checkoutSessionId, env.STRIPE_WEBHOOK_SECRET);
+  const params = new URLSearchParams({
+    session: checkoutSessionId,
+    token,
+  });
+  return `https://cajunsites.com/onboarding/?${params.toString()}`;
 }
 
 async function sendCustomerWelcome(env, customer) {
@@ -113,7 +128,7 @@ async function sendCustomerWelcome(env, customer) {
 
   const firstName = clean(customer.customer_name, 120).split(/\s+/)[0] || 'there';
   const businessName = clean(customer.business_name, 160) || 'your business';
-  const onboardingUrl = 'https://cajunsites.com/onboarding/';
+  const onboardingUrl = await getOnboardingUrl(env, customer.stripe_checkout_session_id);
 
   const text = [
     `Hi ${firstName},`,
@@ -218,6 +233,7 @@ async function processSuccessfulCheckout(session, env) {
   }
 
   if ((insert.meta?.changes || 0) > 0) {
+    const onboardingUrl = await getOnboardingUrl(env, customer.stripe_checkout_session_id);
     const internalText = [
       'New paid CajunSites customer',
       '',
@@ -230,7 +246,7 @@ async function processSuccessfulCheckout(session, env) {
       `Checkout session: ${customer.stripe_checkout_session_id}`,
       '',
       'Customer welcome email: sent',
-      'Onboarding: https://cajunsites.com/onboarding/',
+      `Onboarding: ${onboardingUrl}`,
     ].join('\n');
 
     const internalResponse = await fetch('https://api.resend.com/emails', {
@@ -361,6 +377,33 @@ async function handleOnboarding(request, env) {
     const verification = await verifyTurnstile(request, env, data, 'onboarding');
     if (!verification.ok) return verification.response;
 
+    if (!env.DB || !env.STRIPE_WEBHOOK_SECRET) {
+      console.error('Onboarding customer verification is not configured');
+      return json({ ok: false, error: 'Customer verification is temporarily unavailable. Please try again.' }, 503);
+    }
+
+    const checkoutSessionId = clean(data.checkout_session_id, 255);
+    const onboardingToken = clean(data.onboarding_token, 128);
+    if (!checkoutSessionId || !onboardingToken) {
+      return json({ ok: false, error: 'Please use the onboarding link from your CajunSites welcome email.' }, 403);
+    }
+
+    const expectedToken = await createOnboardingToken(checkoutSessionId, env.STRIPE_WEBHOOK_SECRET);
+    if (!constantTimeStringEqual(onboardingToken, expectedToken)) {
+      return json({ ok: false, error: 'This onboarding link is invalid. Please use the link from your CajunSites welcome email.' }, 403);
+    }
+
+    const customer = await env.DB.prepare(`
+      SELECT id, stripe_checkout_session_id, email, status, onboarding_completed
+      FROM customers
+      WHERE stripe_checkout_session_id = ?
+      LIMIT 1
+    `).bind(checkoutSessionId).first();
+
+    if (!customer) {
+      return json({ ok: false, error: 'We could not match this onboarding link to a paid CajunSites customer.' }, 403);
+    }
+
     const contactName = clean(data.contact_name, 120);
     const businessName = clean(data.business_name, 160);
     const publicEmail = clean(data.public_email, 254);
@@ -384,6 +427,10 @@ async function handleOnboarding(request, env) {
 
     const text = [
       'New CajunSites customer onboarding submission',
+      '',
+      `Customer record ID: ${customer.id}`,
+      `Checkout session: ${customer.stripe_checkout_session_id}`,
+      `Billing email: ${customer.email}`,
       '',
       ...section('BUSINESS DETAILS', [
         ['Contact name', 'contact_name', 120],
@@ -447,6 +494,14 @@ async function handleOnboarding(request, env) {
       subject: `Customer onboarding: ${businessName}`,
       text,
     });
+
+    await env.DB.prepare(`
+      UPDATE customers
+      SET status = 'Onboarding Received',
+          onboarding_completed = 1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(customer.id).run();
 
     return json({ ok: true });
   } catch (error) {
