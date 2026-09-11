@@ -2,32 +2,23 @@ import prospectWorker from './prospects.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
-  headers: {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-  },
+  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
 });
 
 const clean = (value, max = 2000) => String(value ?? '').trim().slice(0, max);
 const DNS_API = 'https://cajun-sites-dns.vercel.app/api/dns';
 const VERCEL_CONCEPT_PROJECT = 'cajun-sites-prospect-websites';
+const RESEARCH_MODEL = 'gpt-5.6-luna';
 
 function slugify(value) {
-  return clean(value, 200)
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-')
-    .slice(0, 63);
+  return clean(value, 200).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-').slice(0, 63);
 }
-
 function htmlEscape(value) {
-  return String(value ?? '').replace(/[&<>"']/g, ch => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[ch]));
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function safeUrl(value) {
+  try { const u = new URL(String(value || '')); return u.protocol === 'https:' ? u.toString() : ''; } catch { return ''; }
 }
 
 async function ensureConceptSchema(env) {
@@ -38,6 +29,11 @@ async function ensureConceptSchema(env) {
     'ALTER TABLE prospects ADD COLUMN concept_deployment_id TEXT',
     'ALTER TABLE prospects ADD COLUMN concept_build_error TEXT',
     'ALTER TABLE prospects ADD COLUMN concept_built_at TEXT',
+    "ALTER TABLE prospects ADD COLUMN research_status TEXT NOT NULL DEFAULT 'Not Run'",
+    'ALTER TABLE prospects ADD COLUMN business_vertical TEXT',
+    'ALTER TABLE prospects ADD COLUMN research_json TEXT',
+    'ALTER TABLE prospects ADD COLUMN research_error TEXT',
+    'ALTER TABLE prospects ADD COLUMN researched_at TEXT',
   ];
   for (const sql of alters) {
     try { await env.DB.prepare(sql).run(); } catch (error) {
@@ -45,212 +41,149 @@ async function ensureConceptSchema(env) {
       if (!/duplicate column|already exists/i.test(message)) throw error;
     }
   }
-  await env.DB.prepare(`UPDATE prospects
-    SET concept_state = CASE WHEN COALESCE(concept_url,'') <> '' THEN 'Built' ELSE 'Not Built' END
-    WHERE concept_state IS NULL OR concept_state = '' OR (concept_state = 'Not Built' AND COALESCE(concept_url,'') <> '')`).run();
-  await env.DB.prepare(`UPDATE prospects SET stage='Qualified'
-    WHERE stage='Concept Built' AND COALESCE(concept_url,'')='' AND COALESCE(concept_state,'Not Built')='Not Built'`).run();
+  await env.DB.prepare(`UPDATE prospects SET concept_state=CASE WHEN COALESCE(concept_url,'')<>'' THEN 'Built' ELSE 'Not Built' END
+    WHERE concept_state IS NULL OR concept_state='' OR (concept_state='Not Built' AND COALESCE(concept_url,'')<>'')`).run();
+  await env.DB.prepare(`UPDATE prospects SET stage='Qualified' WHERE stage='Concept Built' AND COALESCE(concept_url,'')='' AND COALESCE(concept_state,'Not Built')='Not Built'`).run();
 }
 
 async function currentUser(request, env) {
-  const url = new URL(request.url);
-  const headers = new Headers();
-  const cookie = request.headers.get('cookie');
+  const url = new URL(request.url); const headers = new Headers(); const cookie = request.headers.get('cookie');
   if (cookie) headers.set('cookie', cookie);
-  const response = await prospectWorker.fetch(new Request(new URL('/api/admin/me', url.origin), { method: 'GET', headers }), env);
+  const response = await prospectWorker.fetch(new Request(new URL('/api/admin/me', url.origin), { method:'GET', headers }), env);
   if (!response.ok) return null;
-  const data = await response.json().catch(() => null);
-  return data?.user || null;
+  const data = await response.json().catch(() => null); return data?.user || null;
 }
 
-async function recordActivity(env, user, prospect, description, metadata = {}) {
+async function recordActivity(env, user, prospect, description, metadata = {}, eventType = 'concept_build') {
   try {
-    await env.DB.prepare(`INSERT INTO admin_activity (customer_id,event_type,description,metadata_json,created_at)
-      VALUES (NULL,'concept_build',?,?,CURRENT_TIMESTAMP)`)
-      .bind(description, JSON.stringify({ prospect_id: prospect.id, business_name: prospect.business_name, ...metadata, actor: user ? { id:user.id,name:user.name,email:user.email,role:user.role } : null })).run();
+    await env.DB.prepare(`INSERT INTO admin_activity (customer_id,event_type,description,metadata_json,created_at) VALUES (NULL,?,?,?,CURRENT_TIMESTAMP)`)
+      .bind(eventType, description, JSON.stringify({ prospect_id:prospect.id, business_name:prospect.business_name, ...metadata, actor:user ? {id:user.id,name:user.name,email:user.email,role:user.role}:null })).run();
   } catch {}
 }
 
-function buildConceptHtml(prospect) {
-  const name = htmlEscape(prospect.business_name);
-  const category = htmlEscape(prospect.category || 'Local Business');
-  const city = htmlEscape(prospect.city || 'your community');
-  const state = htmlEscape(prospect.state || '');
-  const market = [city, state].filter(Boolean).join(', ');
-  const phone = htmlEscape(prospect.phone || '');
-  const email = htmlEscape(prospect.email || '');
-  const contactItems = [
-    phone ? `<a href="tel:${phone.replace(/[^+\d]/g, '')}">${phone}</a>` : '',
-    email ? `<a href="mailto:${email}">${email}</a>` : '',
-  ].filter(Boolean).join('');
-  const contactBlock = contactItems || '<span>Contact the business for details.</span>';
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>${name} | Concept Website</title>
-<style>
-:root{--navy:#173f64;--blue:#204f79;--gold:#f0b719;--cream:#fbf8f1;--ink:#17202a;--muted:#65717d;--line:#e8edf1}*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:white;line-height:1.55}a{color:inherit}.concept-bar{background:#240643;color:#fff;text-align:center;padding:9px 18px;font-size:.78rem;font-weight:750}.concept-bar b{color:#f0b719}.nav{height:76px;display:flex;align-items:center;justify-content:space-between;width:min(1120px,calc(100% - 40px));margin:auto}.brand{font-size:1.15rem;font-weight:900;color:var(--navy)}.nav span{font-size:.88rem;color:var(--muted)}.hero{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:92px 20px}.hero-inner{width:min(1120px,100%);margin:auto;display:grid;grid-template-columns:1.1fr .9fr;gap:70px;align-items:center}.kicker{text-transform:uppercase;letter-spacing:.14em;color:#f5cc58;font-size:.76rem;font-weight:850}.hero h1{font-size:clamp(2.8rem,6vw,5rem);line-height:.96;letter-spacing:-.05em;margin:14px 0 20px}.hero p{font-size:1.15rem;color:#e5edf3;max-width:600px}.cta{display:inline-flex;margin-top:14px;background:#fff;color:var(--navy);padding:14px 20px;border-radius:10px;text-decoration:none;font-weight:850}.visual{min-height:310px;border-radius:26px;background:linear-gradient(145deg,#f2eadc,#d9c9ad);position:relative;overflow:hidden}.visual:before{content:"";position:absolute;inset:44px;border:14px solid rgba(255,255,255,.9);clip-path:polygon(50% 0,100% 34%,100% 100%,0 100%,0 34%)}.section{padding:76px 20px}.inner{width:min(1120px,100%);margin:auto}.eyebrow{color:var(--blue);text-transform:uppercase;letter-spacing:.13em;font-size:.74rem;font-weight:850}.section h2{font-size:clamp(2rem,4vw,3.2rem);line-height:1;letter-spacing:-.04em;margin:8px 0 18px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px}.card{border:1px solid var(--line);border-radius:18px;padding:24px;background:#fff}.card strong{display:block;color:var(--navy);margin-bottom:8px}.card p{color:var(--muted);margin:0}.contact{background:var(--cream)}.contact-box{display:flex;justify-content:space-between;gap:24px;align-items:center;border-radius:22px;background:white;border:1px solid #ece4d6;padding:28px}.contact-links{display:flex;gap:12px;flex-wrap:wrap}.contact-links a,.contact-links span{padding:11px 14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;font-weight:750;color:var(--navy)}footer{padding:28px 20px;text-align:center;color:#7a727f;font-size:.78rem;border-top:1px solid var(--line)}@media(max-width:760px){.hero-inner,.cards{grid-template-columns:1fr}.visual{min-height:230px}.contact-box{display:block}.contact-links{margin-top:18px}.nav span{display:none}}
-</style>
-</head>
-<body>
-<div class="concept-bar">Concept website prepared by <b>CajunSites</b>. Business details should be confirmed before launch.</div>
-<header class="nav"><div class="brand">${name}</div><span>${category} · ${market}</span></header>
-<main>
-<section class="hero"><div class="hero-inner"><div><div class="kicker">${category}</div><h1>${name}</h1><p>A professional online presence for ${name}, serving ${market}. This concept uses only currently recorded business information and is ready to be customized with confirmed services, photos, reviews, hours, and contact details.</p><a class="cta" href="#contact">Get in Touch</a></div><div class="visual" aria-hidden="true"></div></div></section>
-<section class="section"><div class="inner"><div class="eyebrow">Built for local customers</div><h2>A clear, modern place to learn about the business.</h2><div class="cards"><div class="card"><strong>Services</strong><p>Present confirmed services in a simple, mobile-friendly format.</p></div><div class="card"><strong>Local Presence</strong><p>Give customers an easy way to find important business and service-area information.</p></div><div class="card"><strong>Easy Contact</strong><p>Make the next step clear with phone, email, quote, or contact options once confirmed.</p></div></div></div></section>
-<section class="section contact" id="contact"><div class="inner"><div class="contact-box"><div><div class="eyebrow">Contact</div><h2 style="margin-bottom:0">Connect with ${name}</h2></div><div class="contact-links">${contactBlock}</div></div></div></section>
-</main>
-<footer>Concept preview created by CajunSites. Final website content is subject to customer review and approval.</footer>
-</body></html>`;
+function responseText(data) {
+  if (typeof data?.output_text === 'string' && data.output_text.trim()) return data.output_text.trim();
+  const parts = [];
+  for (const item of data?.output || []) for (const c of item?.content || []) if (c?.type === 'output_text' && c?.text) parts.push(c.text);
+  return parts.join('\n').trim();
+}
+function parseJsonText(text) {
+  const raw = String(text || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  const first = raw.indexOf('{'), last = raw.lastIndexOf('}');
+  if (first < 0 || last < first) throw new Error('Research response did not contain JSON.');
+  return JSON.parse(raw.slice(first, last + 1));
+}
+function normalizeResearch(raw) {
+  const facts = Array.isArray(raw?.facts) ? raw.facts.map(f => ({
+    label: clean(f?.label, 80), value: clean(f?.value, 300), source_url: safeUrl(f?.source_url), confidence: clean(f?.confidence, 20).toLowerCase(),
+  })).filter(f => f.label && f.value && f.source_url && ['high','medium'].includes(f.confidence)).slice(0, 20) : [];
+  const services = Array.isArray(raw?.services) ? raw.services.map(s => ({
+    name: clean(s?.name, 100), source_url: safeUrl(s?.source_url), confidence: clean(s?.confidence, 20).toLowerCase(),
+  })).filter(s => s.name && s.source_url && s.confidence === 'high').slice(0, 10) : [];
+  const sources = Array.isArray(raw?.sources) ? raw.sources.map(s => ({ title:clean(s?.title,160), url:safeUrl(s?.url) })).filter(s=>s.url).slice(0,15) : [];
+  return {
+    vertical: clean(raw?.vertical, 100) || 'Local Business',
+    summary: clean(raw?.summary, 700),
+    facts, services, sources,
+    review_themes: Array.isArray(raw?.review_themes) ? raw.review_themes.map(x=>clean(x,120)).filter(Boolean).slice(0,5) : [],
+    suggested_sections: Array.isArray(raw?.suggested_sections) ? raw.suggested_sections.map(x=>clean(x,80)).filter(Boolean).slice(0,6) : [],
+  };
 }
 
-function vercelQuery(env) {
-  const params = new URLSearchParams();
-  if (env.VERCEL_TEAM_ID) params.set('teamId', env.VERCEL_TEAM_ID);
-  return params.toString() ? `?${params}` : '';
-}
-
-async function vercelFetch(env, path, options = {}) {
-  const response = await fetch(`https://api.vercel.com${path}${vercelQuery(env)}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${env.VERCEL_API_TOKEN}`,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+async function runBusinessResearch(env, prospect) {
+  if (!env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured for Business Research.');
+  const identity = [prospect.business_name, prospect.city, prospect.state, prospect.category, prospect.phone].filter(Boolean).join(' | ');
+  const prompt = `Research this specific small business using current public web sources: ${identity}.
+Return ONLY valid JSON with this shape:
+{"vertical":"specific business vertical","summary":"2-3 sentence factual summary","facts":[{"label":"Phone|Address|Hours|Service Area|Other verified fact","value":"...","source_url":"https://...","confidence":"high|medium"}],"services":[{"name":"explicitly offered service","source_url":"https://...","confidence":"high"}],"review_themes":["non-quoted recurring theme"],"suggested_sections":["vertical-appropriate website section"],"sources":[{"title":"source title","url":"https://..."}]}
+Rules: identify the exact business, not a similarly named business. Prefer official business profiles, reputable directories, social profiles controlled by the business, and major review platforms. Never invent years in business, licensing, insurance, certifications, awards, 24/7 availability, guarantees, service areas, or services. Only put a service in services when a public source explicitly supports it. Do not quote reviews. If identity is ambiguous, omit uncertain facts and say so in summary. Use source URLs for every factual item.`;
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method:'POST', headers:{ Authorization:`Bearer ${env.OPENAI_API_KEY}`, 'Content-Type':'application/json' },
+    body: JSON.stringify({ model: env.OPENAI_RESEARCH_MODEL || RESEARCH_MODEL, tools:[{type:'web_search'}], input:prompt }),
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || data?.message || `Vercel request failed (${response.status})`);
-  return data;
+  const data = await response.json().catch(()=>({}));
+  if (!response.ok) throw new Error(data?.error?.message || `Business research request failed (${response.status})`);
+  return normalizeResearch(parseJsonText(responseText(data)));
 }
 
-async function ensureProspectDns(env, slug) {
-  const response = await fetch(env.CAJUNSITES_DNS_API_URL || DNS_API, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.DNS_INTEGRATION_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name: slug, content: 'cname.vercel-dns.com', proxied: false, ttl: 1 }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error || data?.message || `DNS request failed (${response.status})`);
-  return data;
-}
-
-async function ensureVercelProjectDomain(env, alias) {
-  try {
-    return await vercelFetch(env, `/v10/projects/${encodeURIComponent(VERCEL_CONCEPT_PROJECT)}/domains`, {
-      method: 'POST',
-      body: JSON.stringify({ name: alias }),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/already exists|already added|domain.*exists/i.test(message)) return { name: alias, existing: true };
-    throw error;
-  }
-}
-
-async function waitForDeployment(env, deploymentId) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const data = await vercelFetch(env, `/v13/deployments/${encodeURIComponent(deploymentId)}`);
-    const state = data.readyState || data.status;
-    if (state === 'READY') return data;
-    if (['ERROR','CANCELED'].includes(state)) throw new Error(`Vercel deployment ended in ${state}`);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
-  throw new Error('Vercel deployment did not become ready in time. Try Build Concept again to check/redeploy.');
-}
-
-async function assignAliasWithRetry(env, deploymentId, alias) {
-  let lastError;
-  for (let attempt = 0; attempt < 15; attempt += 1) {
-    try {
-      return await vercelFetch(env, `/v2/deployments/${encodeURIComponent(deploymentId)}/aliases`, {
-        method: 'POST',
-        body: JSON.stringify({ alias }),
-      });
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      const mayProvision = /ssl|certificate|domain|verification|not configured/i.test(message);
-      if (!mayProvision || attempt === 14) throw error;
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-  throw lastError || new Error('Could not assign the concept domain alias.');
-}
-
-async function buildConcept(request, env, id) {
-  if (!env.DB) return json({ ok:false,error:'Customer database is not configured.' },503);
-  const user = await currentUser(request, env);
-  if (!user) return json({ ok:false,error:'Authentication required.' },401);
-  if (user.role === 'read_only') return json({ ok:false,error:'Your role is read only.' },403);
+async function researchBusiness(request, env, id) {
+  if (!env.DB) return json({ok:false,error:'Customer database is not configured.'},503);
+  const user = await currentUser(request,env); if (!user) return json({ok:false,error:'Authentication required.'},401);
+  if (user.role === 'read_only') return json({ok:false,error:'Your role is read only.'},403);
   await ensureConceptSchema(env);
-
   const prospect = await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();
-  if (!prospect) return json({ ok:false,error:'Prospect not found.' },404);
-  if (!env.VERCEL_API_TOKEN || !env.DNS_INTEGRATION_API_KEY) {
-    return json({ ok:false,error:'Concept builder setup is incomplete. VERCEL_API_TOKEN and DNS_INTEGRATION_API_KEY must be configured as Worker secrets.' },503);
-  }
-
-  const slug = slugify(prospect.concept_slug || prospect.business_name);
-  if (!slug) return json({ ok:false,error:'Could not create a valid concept subdomain from the business name.' },400);
-  const alias = `${slug}.cajunsites.com`;
-  const conceptUrl = `https://${alias}`;
-
-  await env.DB.prepare(`UPDATE prospects SET concept_state='Building',concept_slug=?,concept_build_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(slug,id).run();
-  await recordActivity(env,user,prospect,`${user.name} started concept build for ${prospect.business_name}`,{slug});
-
+  if (!prospect) return json({ok:false,error:'Prospect not found.'},404);
+  await env.DB.prepare(`UPDATE prospects SET research_status='Researching',research_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id).run();
+  await recordActivity(env,user,prospect,`${user.name} started business research for ${prospect.business_name}`,{},'prospect_research');
   try {
-    const deployment = await vercelFetch(env, '/v13/deployments', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: VERCEL_CONCEPT_PROJECT,
-        project: VERCEL_CONCEPT_PROJECT,
-        target: 'production',
-        files: [{ file: 'index.html', data: buildConceptHtml(prospect) }],
-        projectSettings: { framework: null },
-        meta: { cajunsites_prospect_id: String(id), cajunsites_slug: slug },
-      }),
-    });
-    const deploymentId = deployment.id || deployment.uid;
-    if (!deploymentId) throw new Error('Vercel did not return a deployment ID.');
-
-    await waitForDeployment(env, deploymentId);
-    await ensureProspectDns(env, slug);
-    await ensureVercelProjectDomain(env, alias);
-    await assignAliasWithRetry(env, deploymentId, alias);
-
-    await env.DB.prepare(`UPDATE prospects SET concept_url=?,concept_state='Built',concept_slug=?,concept_deployment_id=?,concept_build_error=NULL,concept_built_at=CURRENT_TIMESTAMP,stage=CASE WHEN stage='Qualified' THEN 'Concept Built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .bind(conceptUrl,slug,deploymentId,id).run();
-    await recordActivity(env,user,prospect,`${user.name} built concept site for ${prospect.business_name}`,{slug,concept_url:conceptUrl,deployment_id:deploymentId});
-    return json({ ok:true,concept_url:conceptUrl,concept_state:'Built',deployment_id:deploymentId });
-  } catch (error) {
-    const message = clean(error instanceof Error ? error.message : String(error), 1000);
-    await env.DB.prepare(`UPDATE prospects SET concept_state='Build Failed',concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(message,id).run();
-    await recordActivity(env,user,prospect,`Concept build failed for ${prospect.business_name}`,{slug,error:message});
-    return json({ ok:false,error:message || 'Concept build failed.' },502);
+    const research = await runBusinessResearch(env,prospect);
+    await env.DB.prepare(`UPDATE prospects SET research_status='Complete',business_vertical=?,research_json=?,research_error=NULL,researched_at=CURRENT_TIMESTAMP,category=CASE WHEN COALESCE(category,'')='' THEN ? ELSE category END,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .bind(research.vertical,JSON.stringify(research),research.vertical,id).run();
+    await recordActivity(env,user,prospect,`${user.name} completed business research for ${prospect.business_name}`,{vertical:research.vertical,sources:research.sources.length,facts:research.facts.length},'prospect_research');
+    return json({ok:true,research});
+  } catch(error) {
+    const message=clean(error instanceof Error?error.message:String(error),1000);
+    await env.DB.prepare(`UPDATE prospects SET research_status='Failed',research_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(message,id).run();
+    await recordActivity(env,user,prospect,`Business research failed for ${prospect.business_name}`,{error:message},'prospect_research');
+    return json({ok:false,error:message},502);
   }
 }
 
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith('/api/admin/prospects')) {
-      try { await ensureConceptSchema(env); } catch (error) { console.error('Concept schema setup failed', error); }
-      const match = url.pathname.match(/^\/api\/admin\/prospects\/(\d+)\/build-concept$/);
-      if (match) {
-        if (request.method !== 'POST') return json({ok:false,error:'Method not allowed.'},405);
-        try { return await buildConcept(request,env,Number(match[1])); }
-        catch (error) {
-          console.error('Concept build request failed', error);
-          return json({ok:false,error:'Concept build request failed.'},500);
-        }
-      }
-    }
-    return prospectWorker.fetch(request, env);
-  },
-};
+function verticalPreset(vertical='') {
+  const v=vertical.toLowerCase();
+  if (/collision|auto body|body shop/.test(v)) return { kicker:'Collision & Auto Body', headline:'Get your vehicle back on the road with confidence.', sections:['Collision Repair','Estimates & Insurance','Vehicle Care'], accent:'#c97822' };
+  if (/auto repair|automotive|mechanic|diesel/.test(v)) return { kicker:'Automotive Service', headline:'Straightforward automotive service information, built around local drivers.', sections:['Repair Services','Vehicle Maintenance','Request Service'], accent:'#b86a18' };
+  if (/plumb/.test(v)) return { kicker:'Plumbing Services', headline:'A clear path from plumbing problem to service request.', sections:['Plumbing Services','Service Area','Request Service'], accent:'#1870a8' };
+  if (/tow|roadside/.test(v)) return { kicker:'Towing & Roadside', headline:'Fast access to towing and roadside contact information.', sections:['Towing Services','Roadside Help','Call for Service'], accent:'#c47d17' };
+  if (/salon|beauty|hair|wellness|massage/.test(v)) return { kicker:'Beauty & Wellness', headline:'Services, details, and an easy next step for new and returning clients.', sections:['Services','About the Studio','Book or Contact'], accent:'#9b4d7e' };
+  if (/child|daycare|learning|education/.test(v)) return { kicker:'Childcare & Learning', headline:'A welcoming place for families to learn about programs and get in touch.', sections:['Programs','For Families','Contact'], accent:'#39755e' };
+  if (/clean/.test(v)) return { kicker:'Cleaning Services', headline:'Professional cleaning information with a simple route to request service.', sections:['Cleaning Services','Service Area','Request a Quote'], accent:'#347e91' };
+  if (/flor|flower/.test(v)) return { kicker:'Floral & Gifts', headline:'A polished showcase for flowers, occasions, and local ordering.', sections:['Flowers & Occasions','Featured Work','Order or Contact'], accent:'#8e5275' };
+  return { kicker: vertical || 'Local Business', headline:'A clear, modern place for customers to learn about the business.', sections:['Services','Local Presence','Easy Contact'], accent:'#204f79' };
+}
+function readResearch(prospect) { try { return prospect.research_json ? JSON.parse(prospect.research_json) : null; } catch { return null; } }
+
+function buildConceptHtml(prospect) {
+  const research=readResearch(prospect); const preset=verticalPreset(prospect.business_vertical || research?.vertical || prospect.category || '');
+  const name=htmlEscape(prospect.business_name); const category=htmlEscape(prospect.business_vertical || research?.vertical || prospect.category || 'Local Business');
+  const city=htmlEscape(prospect.city || 'your community'); const state=htmlEscape(prospect.state || ''); const market=[city,state].filter(Boolean).join(', ');
+  const phone=htmlEscape(prospect.phone || ''); const email=htmlEscape(prospect.email || '');
+  const fact=(label)=>research?.facts?.find(f=>String(f.label).toLowerCase()===label)?.value||'';
+  const researchedPhone=htmlEscape(fact('phone')); const researchedAddress=htmlEscape(fact('address')); const researchedHours=htmlEscape(fact('hours'));
+  const contactPhone=phone||researchedPhone;
+  const contactItems=[contactPhone?`<a href="tel:${contactPhone.replace(/[^+\d]/g,'')}">${contactPhone}</a>`:'',email?`<a href="mailto:${email}">${email}</a>`:'',researchedAddress?`<span>${researchedAddress}</span>`:''].filter(Boolean).join('');
+  const contactBlock=contactItems||'<span>Contact the business for details.</span>';
+  const services=(research?.services||[]).slice(0,3); const cards=(services.length?services.map(s=>s.name):preset.sections).slice(0,3);
+  const summaries=[
+    'Learn about confirmed services and how to take the next step.',
+    researchedHours?`Publicly listed hours: ${researchedHours}`:`Built to make important business information easy to find.`,
+    'Make contacting the business simple from any device.'
+  ];
+  const heroSummary=research?.summary ? htmlEscape(research.summary) : `A professional online presence for ${name}, serving ${market}.`;
+  const cardsHtml=cards.map((title,i)=>`<div class="card"><strong>${htmlEscape(title)}</strong><p>${htmlEscape(summaries[i]||summaries[0])}</p></div>`).join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${name} | Concept Website</title><style>
+:root{--navy:#173f64;--blue:${preset.accent};--gold:#f0b719;--cream:#fbf8f1;--ink:#17202a;--muted:#65717d;--line:#e8edf1}*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:#fff;line-height:1.55}a{color:inherit}.concept-bar{background:#240643;color:#fff;text-align:center;padding:9px 18px;font-size:.78rem;font-weight:750}.concept-bar b{color:#f0b719}.nav{height:76px;display:flex;align-items:center;justify-content:space-between;width:min(1120px,calc(100% - 40px));margin:auto}.brand{font-size:1.15rem;font-weight:900;color:var(--navy)}.nav span{font-size:.88rem;color:var(--muted)}.hero{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:92px 20px}.hero-inner{width:min(1120px,100%);margin:auto;display:grid;grid-template-columns:1.12fr .88fr;gap:70px;align-items:center}.kicker{text-transform:uppercase;letter-spacing:.14em;color:#f5cc58;font-size:.76rem;font-weight:850}.hero h1{font-size:clamp(2.7rem,6vw,5rem);line-height:.96;letter-spacing:-.05em;margin:14px 0 16px}.hero h2{font-size:clamp(1.25rem,2.4vw,1.7rem);margin:0 0 18px;font-weight:700;color:#fff}.hero p{font-size:1.04rem;color:#e5edf3;max-width:650px}.cta{display:inline-flex;margin-top:14px;background:#fff;color:var(--navy);padding:14px 20px;border-radius:10px;text-decoration:none;font-weight:850}.visual{min-height:320px;border-radius:26px;background:linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.24);display:grid;place-items:center;padding:32px}.visual-mark{font-size:5rem;opacity:.9}.section{padding:76px 20px}.inner{width:min(1120px,100%);margin:auto}.eyebrow{color:var(--blue);text-transform:uppercase;letter-spacing:.13em;font-size:.74rem;font-weight:850}.section h2{font-size:clamp(2rem,4vw,3.2rem);line-height:1;letter-spacing:-.04em;margin:8px 0 18px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px}.card{border:1px solid var(--line);border-radius:18px;padding:24px;background:#fff}.card strong{display:block;color:var(--navy);margin-bottom:8px}.card p{color:var(--muted);margin:0}.contact{background:var(--cream)}.contact-box{display:flex;justify-content:space-between;gap:24px;align-items:center;border-radius:22px;background:#fff;border:1px solid #ece4d6;padding:28px}.contact-links{display:flex;gap:12px;flex-wrap:wrap}.contact-links a,.contact-links span{padding:11px 14px;border:1px solid var(--line);border-radius:10px;text-decoration:none;font-weight:750;color:var(--navy)}footer{padding:28px 20px;text-align:center;color:#7a727f;font-size:.78rem;border-top:1px solid var(--line)}@media(max-width:760px){.hero-inner,.cards{grid-template-columns:1fr}.visual{min-height:190px}.contact-box{display:block}.contact-links{margin-top:18px}.nav span{display:none}}
+</style></head><body><div class="concept-bar">Concept website prepared by <b>CajunSites</b>. Public business details should be confirmed before launch.</div><header class="nav"><div class="brand">${name}</div><span>${category} · ${market}</span></header><main><section class="hero"><div class="hero-inner"><div><div class="kicker">${htmlEscape(preset.kicker)}</div><h1>${name}</h1><h2>${htmlEscape(preset.headline)}</h2><p>${heroSummary}</p><a class="cta" href="#contact">Get in Touch</a></div><div class="visual" aria-hidden="true"><div class="visual-mark">●</div></div></div></section><section class="section"><div class="inner"><div class="eyebrow">${category}</div><h2>Built around what customers need to know.</h2><div class="cards">${cardsHtml}</div></div></section><section class="section contact" id="contact"><div class="inner"><div class="contact-box"><div><div class="eyebrow">Contact</div><h2 style="margin-bottom:0">Connect with ${name}</h2></div><div class="contact-links">${contactBlock}</div></div></div></section></main><footer>Concept preview created by CajunSites. Final website content is subject to customer review and approval.</footer></body></html>`;
+}
+
+function vercelQuery(env){const p=new URLSearchParams();if(env.VERCEL_TEAM_ID)p.set('teamId',env.VERCEL_TEAM_ID);return p.toString()?`?${p}`:''}
+async function vercelFetch(env,path,options={}){const r=await fetch(`https://api.vercel.com${path}${vercelQuery(env)}`,{...options,headers:{Authorization:`Bearer ${env.VERCEL_API_TOKEN}`,'Content-Type':'application/json',...(options.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error?.message||d?.message||`Vercel request failed (${r.status})`);return d}
+async function ensureProspectDns(env,slug){const r=await fetch(env.CAJUNSITES_DNS_API_URL||DNS_API,{method:'POST',headers:{Authorization:`Bearer ${env.DNS_INTEGRATION_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({name:slug,content:'cname.vercel-dns.com',proxied:false,ttl:1})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error||d?.message||`DNS request failed (${r.status})`);return d}
+async function ensureVercelProjectDomain(env,alias){try{return await vercelFetch(env,`/v10/projects/${encodeURIComponent(VERCEL_CONCEPT_PROJECT)}/domains`,{method:'POST',body:JSON.stringify({name:alias})})}catch(error){const m=error instanceof Error?error.message:String(error);if(/already exists|already added|domain.*exists/i.test(m))return{name:alias,existing:true};throw error}}
+async function waitForDeployment(env,id){for(let i=0;i<20;i++){const d=await vercelFetch(env,`/v13/deployments/${encodeURIComponent(id)}`);const s=d.readyState||d.status;if(s==='READY')return d;if(['ERROR','CANCELED'].includes(s))throw new Error(`Vercel deployment ended in ${s}`);await new Promise(r=>setTimeout(r,1000))}throw new Error('Vercel deployment did not become ready in time. Try Build Concept again.')}
+async function assignAliasWithRetry(env,id,alias){let last;for(let i=0;i<15;i++){try{return await vercelFetch(env,`/v2/deployments/${encodeURIComponent(id)}/aliases`,{method:'POST',body:JSON.stringify({alias})})}catch(e){last=e;const m=e instanceof Error?e.message:String(e);if(!/ssl|certificate|domain|verification|not configured/i.test(m)||i===14)throw e;await new Promise(r=>setTimeout(r,2000))}}throw last||new Error('Could not assign the concept domain alias.')}
+
+async function buildConcept(request,env,id){
+  if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503); const user=await currentUser(request,env); if(!user)return json({ok:false,error:'Authentication required.'},401); if(user.role==='read_only')return json({ok:false,error:'Your role is read only.'},403); await ensureConceptSchema(env);
+  let prospect=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first(); if(!prospect)return json({ok:false,error:'Prospect not found.'},404);
+  if(!env.VERCEL_API_TOKEN||!env.DNS_INTEGRATION_API_KEY)return json({ok:false,error:'Concept builder setup is incomplete. VERCEL_API_TOKEN and DNS_INTEGRATION_API_KEY must be configured as Worker secrets.'},503);
+  if(env.OPENAI_API_KEY && prospect.research_status!=='Complete') {
+    try { const research=await runBusinessResearch(env,prospect); await env.DB.prepare(`UPDATE prospects SET research_status='Complete',business_vertical=?,research_json=?,research_error=NULL,researched_at=CURRENT_TIMESTAMP,category=CASE WHEN COALESCE(category,'')='' THEN ? ELSE category END,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(research.vertical,JSON.stringify(research),research.vertical,id).run(); prospect=await env.DB.prepare('SELECT * FROM prospects WHERE id=?').bind(id).first(); await recordActivity(env,user,prospect,`Business research completed automatically before concept build`,{vertical:research.vertical},'prospect_research'); } catch(error) { const m=clean(error instanceof Error?error.message:String(error),1000); await env.DB.prepare(`UPDATE prospects SET research_status='Failed',research_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(m,id).run(); prospect=await env.DB.prepare('SELECT * FROM prospects WHERE id=?').bind(id).first(); }
+  }
+  const slug=slugify(prospect.concept_slug||prospect.business_name); if(!slug)return json({ok:false,error:'Could not create a valid concept subdomain from the business name.'},400); const alias=`${slug}.cajunsites.com`, conceptUrl=`https://${alias}`;
+  await env.DB.prepare(`UPDATE prospects SET concept_state='Building',concept_slug=?,concept_build_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(slug,id).run(); await recordActivity(env,user,prospect,`${user.name} started concept build for ${prospect.business_name}`,{slug});
+  try { const deployment=await vercelFetch(env,'/v13/deployments',{method:'POST',body:JSON.stringify({name:VERCEL_CONCEPT_PROJECT,project:VERCEL_CONCEPT_PROJECT,target:'production',files:[{file:'index.html',data:buildConceptHtml(prospect)}],projectSettings:{framework:null},meta:{cajunsites_prospect_id:String(id),cajunsites_slug:slug}})}); const deploymentId=deployment.id||deployment.uid;if(!deploymentId)throw new Error('Vercel did not return a deployment ID.'); await waitForDeployment(env,deploymentId); await ensureProspectDns(env,slug); await ensureVercelProjectDomain(env,alias); await assignAliasWithRetry(env,deploymentId,alias); await env.DB.prepare(`UPDATE prospects SET concept_url=?,concept_state='Built',concept_slug=?,concept_deployment_id=?,concept_build_error=NULL,concept_built_at=CURRENT_TIMESTAMP,stage=CASE WHEN stage='Qualified' THEN 'Concept Built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(conceptUrl,slug,deploymentId,id).run(); await recordActivity(env,user,prospect,`${user.name} built concept site for ${prospect.business_name}`,{slug,concept_url:conceptUrl,deployment_id:deploymentId,research_status:prospect.research_status}); return json({ok:true,concept_url:conceptUrl,concept_state:'Built',deployment_id:deploymentId,research_status:prospect.research_status}); }
+  catch(error){const message=clean(error instanceof Error?error.message:String(error),1000);await env.DB.prepare(`UPDATE prospects SET concept_state='Build Failed',concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(message,id).run();await recordActivity(env,user,prospect,`Concept build failed for ${prospect.business_name}`,{slug,error:message});return json({ok:false,error:message||'Concept build failed.'},502)}
+}
+
+export default { async fetch(request,env){const url=new URL(request.url);if(url.pathname.startsWith('/api/admin/prospects')){try{await ensureConceptSchema(env)}catch(error){console.error('Concept schema setup failed',error)} const researchMatch=url.pathname.match(/^\/api\/admin\/prospects\/(\d+)\/research$/);if(researchMatch){if(request.method!=='POST')return json({ok:false,error:'Method not allowed.'},405);return researchBusiness(request,env,Number(researchMatch[1]))} const buildMatch=url.pathname.match(/^\/api\/admin\/prospects\/(\d+)\/build-concept$/);if(buildMatch){if(request.method!=='POST')return json({ok:false,error:'Method not allowed.'},405);try{return await buildConcept(request,env,Number(buildMatch[1]))}catch(error){console.error('Concept build request failed',error);return json({ok:false,error:'Concept build request failed.'},500)}}}return prospectWorker.fetch(request,env)} };
