@@ -73,11 +73,13 @@ function hexFromBytes(bytes) {
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function constantTimeHexEqual(left, right) {
-  if (left.length !== right.length) return false;
+function constantTimeStringEqual(left, right) {
+  const a = String(left || '');
+  const b = String(right || '');
+  if (a.length !== b.length) return false;
   let mismatch = 0;
-  for (let i = 0; i < left.length; i += 1) {
-    mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  for (let i = 0; i < a.length; i += 1) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return mismatch === 0;
 }
@@ -101,7 +103,7 @@ async function verifyStripeWebhookSignature(rawBody, signatureHeader, secret) {
   const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload));
   const expected = hexFromBytes(digest);
 
-  return signatures.some((signature) => constantTimeHexEqual(expected, signature));
+  return signatures.some((signature) => constantTimeStringEqual(expected, signature));
 }
 
 async function sendCustomerWelcome(env, customer) {
@@ -281,6 +283,86 @@ async function handleStripeWebhook(request, env) {
   }
 }
 
+async function handleFulfillmentTest(request, env) {
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    return json({ ok: false, error: 'Test authorization is not configured.' }, 503);
+  }
+
+  const auth = request.headers.get('authorization') || '';
+  const expected = `Bearer ${env.STRIPE_WEBHOOK_SECRET}`;
+  if (!constantTimeStringEqual(auth, expected)) {
+    return json({ ok: false, error: 'Unauthorized.' }, 401);
+  }
+
+  if (!env.DB) return json({ ok: false, error: 'DB binding is not configured.' }, 503);
+
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Send a JSON request body.' }, 400);
+  }
+
+  const email = clean(data.email, 254).toLowerCase();
+  const customerName = clean(data.customer_name, 120) || 'CajunSites Test Customer';
+  const businessName = clean(data.business_name, 160) || 'CajunSites Test Business';
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return json({ ok: false, error: 'A valid test email address is required.' }, 400);
+  }
+
+  const sessionId = `cs_test_${Date.now()}_${crypto.randomUUID()}`;
+
+  try {
+    await processSuccessfulCheckout({
+      id: sessionId,
+      payment_link: CAJUNSITES_PAYMENT_LINK_ID,
+      payment_status: 'paid',
+      customer: null,
+      subscription: null,
+      customer_email: email,
+      customer_details: {
+        email,
+        name: customerName,
+        business_name: businessName,
+      },
+    }, env);
+
+    const customer = await env.DB.prepare(`
+      SELECT id, stripe_checkout_session_id, customer_name, business_name, email, status,
+             onboarding_completed, welcome_email_sent, created_at, updated_at
+      FROM customers
+      WHERE stripe_checkout_session_id = ?
+      LIMIT 1
+    `).bind(sessionId).first();
+
+    if (!customer) throw new Error('Test customer record was not found after processing.');
+
+    await env.DB.prepare(`
+      DELETE FROM customers WHERE stripe_checkout_session_id = ?
+    `).bind(sessionId).run();
+
+    return json({
+      ok: true,
+      test: true,
+      result: customer,
+      test_record_removed: true,
+      note: 'The test exercised D1 customer creation, status assignment, Resend welcome delivery, and the internal paid-customer notification. The temporary D1 row was deleted after verification.',
+    });
+  } catch (error) {
+    console.error('Fulfillment test error', error);
+    try {
+      await env.DB.prepare(`DELETE FROM customers WHERE stripe_checkout_session_id = ?`).bind(sessionId).run();
+    } catch (cleanupError) {
+      console.error('Fulfillment test cleanup error', cleanupError);
+    }
+    return json({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    }, 500);
+  }
+}
+
 async function handleLead(request, env) {
   try {
     const data = await parseRequestData(request);
@@ -447,6 +529,11 @@ export default {
     if (url.hostname === 'www.cajunsites.com') {
       url.hostname = 'cajunsites.com';
       return Response.redirect(url.toString(), 301);
+    }
+
+    if (url.pathname === '/api/fulfillment-test') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405);
+      return handleFulfillmentTest(request, env);
     }
 
     if (url.pathname === '/api/stripe-webhook') {
