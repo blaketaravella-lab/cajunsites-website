@@ -1,0 +1,35 @@
+---
+import '../../styles/global.css';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Admin Login | CajunSites</title>
+  <style>
+    body{min-height:100vh;margin:0;background:linear-gradient(145deg,#22063f,#40146e);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#191520;display:grid;place-items:center;padding:24px}.card{width:min(430px,100%);background:#fff;border-radius:24px;padding:30px;box-shadow:0 28px 70px rgba(0,0,0,.25)}.brand{font-size:1.7rem;font-weight:950;color:#2d0b50;margin-bottom:4px}.brand span{color:#f0b719}.eyebrow{text-transform:uppercase;letter-spacing:.12em;font-weight:900;font-size:.68rem;color:#7a6d82}.card h1{font-size:2rem;line-height:1;margin:14px 0 8px;color:#22063f}.card p{color:#6d6274;font-size:.9rem;line-height:1.55}.field{display:grid;gap:6px;margin-top:14px}.field label{font-size:.75rem;font-weight:850;color:#4d4155}.field input{min-height:46px;border:1px solid #ddd5e1;border-radius:11px;padding:0 12px;font:inherit}.button{width:100%;margin-top:18px;min-height:46px;border:0;border-radius:11px;background:#f0b719;color:#24162d;font-weight:950;cursor:pointer}.button:disabled{opacity:.6;cursor:wait}.status{min-height:20px;margin-top:12px;font-size:.8rem;color:#8d2424}.micro{font-size:.72rem;color:#8c8192;margin-top:16px;text-align:center}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">Cajun<span>Sites</span></div>
+    <div class="eyebrow">Internal Access</div>
+    <h1>Sign in</h1>
+    <p>Use your CajunSites internal account to continue.</p>
+    <form id="loginForm">
+      <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="username" required /></div>
+      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required /></div>
+      <button id="submit" class="button" type="submit">Sign In</button>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </form>
+    <div class="micro">Protected CajunSites administrative system.</div>
+  </main>
+<script is:inline>
+const form=document.getElementById('loginForm'),button=document.getElementById('submit'),status=document.getElementById('status');
+const params=new URLSearchParams(location.search);const next=params.get('next')||'/admin/overview/';
+form.addEventListener('submit',async e=>{e.preventDefault();button.disabled=true;button.textContent='Signing In...';status.textContent='';try{const response=await fetch('/api/admin/login',{method:'POST',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({email:form.email.value,password:form.password.value})});const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok)throw new Error(data.error||'Sign in failed.');location.assign(next.startsWith('/admin')?next:'/admin/overview/')}catch(err){status.textContent=err.message||'Sign in failed.';button.disabled=false;button.textContent='Sign In'}});
+</script>
+</body>
+</html>
