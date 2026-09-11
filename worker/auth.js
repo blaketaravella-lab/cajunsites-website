@@ -1,4 +1,5 @@
 import appWorker from './app.js';
+import { pbkdf2Sync } from 'node:crypto';
 
 const ADMIN_COOKIE = 'cajunsites_admin';
 const ADMIN_SESSION_SECONDS = 60 * 60 * 12;
@@ -41,21 +42,8 @@ async function sha256Hex(value) {
 }
 
 async function passwordHash(password, saltHex) {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits'],
-  );
-  const pairs = saltHex.match(/.{2}/g) || [];
-  const salt = new Uint8Array(pairs.map(pair => Number.parseInt(pair, 16)));
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 210000 },
-    key,
-    256,
-  );
-  return bytesToHex(bits);
+  const salt = Buffer.from(saltHex, 'hex');
+  return pbkdf2Sync(String(password), salt, 210000, 32, 'sha256').toString('hex');
 }
 
 async function createSession(userId, env) {
@@ -119,7 +107,7 @@ async function handleLogin(request, env) {
     if (/no such table/i.test(message)) {
       return json({ ok: false, error: 'Internal user database setup is incomplete.' }, 503);
     }
-    if (/PBKDF2|deriveBits|importKey/i.test(message)) {
+    if (/PBKDF2|pbkdf2|crypto/i.test(message)) {
       return json({ ok: false, error: 'Password security service failed.' }, 503);
     }
     return json({ ok: false, error: 'Internal login service failed.' }, 500);
