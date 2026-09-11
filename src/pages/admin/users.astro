@@ -1,0 +1,55 @@
+---
+import AdminShell from '../../components/AdminShell.astro';
+---
+<AdminShell title="Internal Users" eyebrow="Access Control" description="Add, disable, remove, and manage access for CajunSites internal users." active="users">
+  <style>
+    .users-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:14px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-grid .full{grid-column:1/-1}.admin-card label{display:block;font-size:.8rem;font-weight:800;margin-bottom:5px}.admin-card input,.admin-card select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px}.actions{display:flex;gap:8px;flex-wrap:wrap}.danger{color:#8d2424;border-color:#e8caca}.muted{color:var(--muted);font-size:.78rem}.role-help{display:grid;gap:8px;margin-top:12px}.role-help div{padding:10px 12px;border:1px solid var(--line);border-radius:10px}.notice{display:none;padding:11px 13px;border-radius:10px;margin-bottom:14px}.notice.show{display:block;background:#e8f7ee;color:#17683a}.notice.error{background:#fdecec;color:#8d2424}.user-name{font-weight:850;color:var(--purple-950)}.user-email{font-size:.75rem;color:var(--muted)}@media(max-width:950px){.users-grid,.form-grid{grid-template-columns:1fr}.form-grid .full{grid-column:auto}}
+  </style>
+  <div id="notice" class="notice"></div>
+  <div class="users-grid">
+    <div class="admin-card" style="padding:0;overflow:auto">
+      <div style="padding:18px"><h3 style="margin:0">Current Users</h3><p style="margin:5px 0 0">Disabling or removing a user immediately invalidates their active sessions.</p></div>
+      <table class="admin-table"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead><tbody id="rows"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody></table>
+    </div>
+    <div style="display:grid;gap:14px;align-content:start">
+      <div class="admin-card">
+        <h3>Add Internal User</h3>
+        <form id="addForm" class="form-grid">
+          <div><label for="name">Name</label><input id="name" required /></div>
+          <div><label for="email">Email</label><input id="email" type="email" required /></div>
+          <div><label for="role">Role</label><select id="role"><option value="operator">Operator</option><option value="admin">Admin</option><option value="read_only">Read Only</option><option value="owner">Owner</option></select></div>
+          <div><label for="password">Temporary Password</label><input id="password" type="password" minlength="12" required /></div>
+          <div class="full"><button class="admin-action primary" type="submit">Add User</button></div>
+        </form>
+      </div>
+      <div class="admin-card">
+        <h3>Role Definitions</h3>
+        <div class="role-help">
+          <div><strong>Owner</strong><div class="muted">Full access, including internal user management and sensitive settings.</div></div>
+          <div><strong>Admin</strong><div class="muted">Full operational access. Cannot add or remove internal users.</div></div>
+          <div><strong>Operator</strong><div class="muted">Can work customers through onboarding, production, notes, and site operations.</div></div>
+          <div><strong>Read Only</strong><div class="muted">Can view dashboard information but cannot change operational data.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminShell>
+<script is:inline>
+const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=v=>v?new Date(v.replace?.(' ','T')||v).toLocaleString():'Never';
+let users=[];
+function notice(message,bad=false){const n=document.getElementById('notice');n.textContent=message;n.className='notice show'+(bad?' error':'');setTimeout(()=>n.className='notice',4500)}
+function roleLabel(role){return ({owner:'Owner',admin:'Admin',operator:'Operator',read_only:'Read Only'}[role]||role)}
+function render(){const rows=document.getElementById('rows');rows.innerHTML=users.length?users.map(u=>`<tr><td><div class="user-name">${e(u.name)}</div><div class="user-email">${e(u.email)}</div></td><td><select class="roleSelect" data-id="${u.id}" ${u.id===window.adminUser?.id?'disabled':''}><option value="owner" ${u.role==='owner'?'selected':''}>Owner</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option><option value="operator" ${u.role==='operator'?'selected':''}>Operator</option><option value="read_only" ${u.role==='read_only'?'selected':''}>Read Only</option></select></td><td><span class="pill ${u.is_active?'green':'gold'}">${u.is_active?'Active':'Disabled'}</span></td><td>${e(fmt(u.last_login_at))}</td><td><div class="actions"><button class="admin-action toggle" data-id="${u.id}" ${u.id===window.adminUser?.id?'disabled':''}>${u.is_active?'Disable':'Enable'}</button><button class="admin-action reset" data-id="${u.id}">Reset Password</button><button class="admin-action danger remove" data-id="${u.id}" ${u.id===window.adminUser?.id?'disabled':''}>Remove</button></div></td></tr>`).join(''):'<tr><td colspan="5" class="empty">No internal users found.</td></tr>';
+ document.querySelectorAll('.roleSelect').forEach(s=>s.onchange=()=>patchUser(Number(s.dataset.id),{role:s.value}));
+ document.querySelectorAll('.toggle').forEach(b=>b.onclick=()=>{const u=users.find(x=>x.id===Number(b.dataset.id));if(u)patchUser(u.id,{is_active:!u.is_active})});
+ document.querySelectorAll('.remove').forEach(b=>b.onclick=()=>removeUser(Number(b.dataset.id)));
+ document.querySelectorAll('.reset').forEach(b=>b.onclick=()=>resetPassword(Number(b.dataset.id)));
+}
+async function load(){try{if(window.adminUser&&window.adminUser.role!=='owner'){document.getElementById('rows').innerHTML='<tr><td colspan="5" class="empty">Owner access is required.</td></tr>';return}const d=await window.adminApi('/api/admin/users');users=d.users||[];render()}catch(err){notice(err.message,true)}}
+async function patchUser(id,data){try{await window.adminApi(`/api/admin/users/${id}`,{method:'PATCH',body:JSON.stringify(data)});notice('Internal user updated.');await load()}catch(err){notice(err.message,true);await load()}}
+async function removeUser(id){const u=users.find(x=>x.id===id);if(!u||!confirm(`Remove ${u.name} from CajunSites internal access?`))return;try{await window.adminApi(`/api/admin/users/${id}`,{method:'DELETE'});notice(`${u.name} was removed.`);await load()}catch(err){notice(err.message,true)}}
+async function resetPassword(id){const u=users.find(x=>x.id===id);if(!u)return;const password=prompt(`Enter a new password for ${u.name}. Minimum 12 characters.`);if(password===null)return;try{await window.adminApi(`/api/admin/users/${id}/password`,{method:'POST',body:JSON.stringify({password})});notice(`Password reset for ${u.name}. Their existing sessions were ended.`)}catch(err){notice(err.message,true)}}
+document.getElementById('addForm').addEventListener('submit',async ev=>{ev.preventDefault();try{await window.adminApi('/api/admin/users',{method:'POST',body:JSON.stringify({name:document.getElementById('name').value,email:document.getElementById('email').value,role:document.getElementById('role').value,password:document.getElementById('password').value})});ev.target.reset();document.getElementById('role').value='operator';notice('Internal user added.');await load()}catch(err){notice(err.message,true)}});
+window.addEventListener('admin-authenticated',load);if(window.adminUser)load();
+</script>
