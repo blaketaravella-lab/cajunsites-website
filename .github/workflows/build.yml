@@ -25,5 +25,7 @@ jobs:
             echo "Checking $file"
             node --check "$file"
           done
+      - name: Test Visual Family Engine
+        run: node worker/visual-family-engine.test.mjs
       - name: Build Astro site
         run: npm run build
