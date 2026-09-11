@@ -51,17 +51,26 @@ async function recordActivity(env,user,p,description,metadata={},eventType='conc
 
 function responseText(d){if(typeof d?.output_text==='string'&&d.output_text.trim())return d.output_text.trim();const a=[];for(const i of d?.output||[])for(const c of i?.content||[])if(c?.type==='output_text'&&c?.text)a.push(c.text);return a.join('\n').trim()}
 function parseJsonText(t){const r=String(t||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');const f=r.indexOf('{'),l=r.lastIndexOf('}');if(f<0||l<f)throw new Error('Research response did not contain JSON.');return JSON.parse(r.slice(f,l+1))}
+function normalizeGoogleReviews(value){
+  if(!value||typeof value!=='object')return null;
+  const rating=Number(value.rating),count=Math.max(0,Math.floor(Number(value.count)||0)),sourceUrl=safeUrl(value.source_url),themes=Array.isArray(value.themes)?value.themes.map(x=>clean(x,120)).filter(Boolean).slice(0,5):[];
+  if(!sourceUrl||!Number.isFinite(rating)||rating<1||rating>5||count<1)return null;
+  return{rating:Number(rating.toFixed(1)),count,source_url:sourceUrl,themes};
+}
 function normalizeResearch(r){
   const facts=Array.isArray(r?.facts)?r.facts.map(f=>({label:clean(f?.label,80),value:clean(f?.value,300),source_url:safeUrl(f?.source_url),confidence:clean(f?.confidence,20).toLowerCase()})).filter(f=>f.label&&f.value&&f.source_url&&['high','medium'].includes(f.confidence)).slice(0,20):[];
   const services=Array.isArray(r?.services)?r.services.map(s=>({name:clean(s?.name,100),source_url:safeUrl(s?.source_url),confidence:clean(s?.confidence,20).toLowerCase()})).filter(s=>s.name&&s.source_url&&s.confidence==='high').slice(0,10):[];
   const sources=Array.isArray(r?.sources)?r.sources.map(s=>({title:clean(s?.title,160),url:safeUrl(s?.url)})).filter(s=>s.url).slice(0,15):[];
-  return{vertical:clean(r?.vertical,100)||'Local Business',summary:clean(r?.summary,700),facts,services,sources,review_themes:Array.isArray(r?.review_themes)?r.review_themes.map(x=>clean(x,120)).filter(Boolean).slice(0,5):[],suggested_sections:Array.isArray(r?.suggested_sections)?r.suggested_sections.map(x=>clean(x,80)).filter(Boolean).slice(0,6):[]};
+  const confidence=['high','medium','low'].includes(clean(r?.identity_confidence,20).toLowerCase())?clean(r.identity_confidence,20).toLowerCase():'unknown';
+  const googleReviews=normalizeGoogleReviews(r?.google_reviews);
+  const reviewThemes=Array.isArray(r?.review_themes)?r.review_themes.map(x=>clean(x,120)).filter(Boolean).slice(0,5):[];
+  return{vertical:clean(r?.vertical,100)||'Local Business',summary:clean(r?.summary,700),identity_confidence:confidence,facts,services,sources,google_reviews:googleReviews,review_themes:googleReviews?.themes?.length?googleReviews.themes:reviewThemes,suggested_sections:Array.isArray(r?.suggested_sections)?r.suggested_sections.map(x=>clean(x,80)).filter(Boolean).slice(0,6):[]};
 }
 
 async function runBusinessResearch(env,p){
   if(!env.OPENAI_API_KEY)throw new Error('OPENAI_API_KEY is not configured for Business Research.');
   const identity=[p.business_name,p.city,p.state,p.category,p.phone].filter(Boolean).join(' | ');
-  const prompt=`Research this specific small business using current public web sources: ${identity}.\nReturn ONLY valid JSON: {"vertical":"specific business vertical","summary":"2-3 sentence factual summary","facts":[{"label":"Phone|Address|Hours|Service Area|Other verified fact","value":"...","source_url":"https://...","confidence":"high|medium"}],"services":[{"name":"explicitly offered service","source_url":"https://...","confidence":"high"}],"review_themes":["non-quoted recurring theme"],"suggested_sections":["vertical-appropriate website section"],"sources":[{"title":"source title","url":"https://..."}]}. Identify the exact business. Prefer official profiles, reputable directories, controlled social profiles and major review platforms. Never invent years in business, licensing, insurance, certifications, awards, 24/7 availability, guarantees, service areas or services. Only list a service when explicitly supported. Do not quote reviews. Omit uncertain facts. Every factual item needs a source URL.`;
+  const prompt=`Research this exact small business using current public web sources: ${identity}.\nReturn ONLY valid JSON using this shape: {"identity_confidence":"high|medium|low","vertical":"specific business vertical","summary":"2-3 sentence factual summary","facts":[{"label":"Phone|Address|Hours|Service Area|Other verified fact","value":"...","source_url":"https://...","confidence":"high|medium"}],"services":[{"name":"explicitly offered service","source_url":"https://...","confidence":"high"}],"google_reviews":{"rating":4.8,"count":123,"source_url":"https://www.google.com/maps/...","themes":["non-quoted recurring theme"]},"review_themes":["non-quoted recurring theme"],"suggested_sections":["vertical-appropriate website section"],"sources":[{"title":"source title","url":"https://..."}]}. Match the exact business using business name plus location and phone/address when available. Set identity_confidence low if the business identity is ambiguous. Prefer official profiles, Google Business Profile/Google Maps, controlled social profiles, reputable directories and major review platforms. Only populate google_reviews when a current Google listing for the exact business directly supports both rating and review count; otherwise set google_reviews to null. Never quote individual Google reviews, never include reviewer names, and do not copy review text. Summarize only broad recurring themes. Never invent years in business, licensing, insurance, certifications, awards, 24/7 availability, guarantees, service areas or services. Only list a service when explicitly supported. Omit uncertain facts. Every factual item needs a source URL.`;
   const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:env.OPENAI_RESEARCH_MODEL||RESEARCH_MODEL,tools:[{type:'web_search'}],input:prompt})});
   const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error?.message||`Business research request failed (${r.status})`);
   return normalizeResearch(parseJsonText(responseText(d)));
@@ -73,7 +82,7 @@ async function performResearch(env,p,user){
   try{
     const r=await runBusinessResearch(env,p);
     await env.DB.prepare(`UPDATE prospects SET research_status='Complete',business_vertical=?,research_json=?,research_error=NULL,researched_at=CURRENT_TIMESTAMP,category=CASE WHEN COALESCE(category,'')='' THEN ? ELSE category END,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(r.vertical,JSON.stringify(r),r.vertical,p.id).run();
-    await recordActivity(env,user,p,`${user.name} completed business research for ${p.business_name}`,{vertical:r.vertical,sources:r.sources.length,facts:r.facts.length,services:r.services.length},'prospect_research');
+    await recordActivity(env,user,p,`${user.name} completed business research for ${p.business_name}`,{vertical:r.vertical,identity_confidence:r.identity_confidence,sources:r.sources.length,facts:r.facts.length,services:r.services.length,google_rating:r.google_reviews?.rating||null,google_review_count:r.google_reviews?.count||null},'prospect_research');
     return r;
   }catch(e){
     const m=clean(e?.message||e,1000);
@@ -101,6 +110,7 @@ async function ensureDomain(env,alias){try{return await vercelFetch(env,`/v10/pr
 async function waitReady(env,id){for(let i=0;i<25;i++){const d=await vercelFetch(env,`/v13/deployments/${encodeURIComponent(id)}`),s=d.readyState||d.status;if(s==='READY')return d;if(['ERROR','CANCELED'].includes(s))throw new Error(`Vercel deployment ended in ${s}`);await new Promise(r=>setTimeout(r,1000))}throw new Error('Vercel deployment did not become ready in time.')}
 async function assignAlias(env,id,alias){let last;for(let i=0;i<15;i++){try{return await vercelFetch(env,`/v2/deployments/${encodeURIComponent(id)}/aliases`,{method:'POST',body:JSON.stringify({alias})})}catch(e){last=e;if(!/ssl|certificate|domain|verification|not configured|already in use/i.test(String(e?.message||e))||i===14)throw e;await new Promise(r=>setTimeout(r,2000))}}throw last||new Error('Could not assign the concept domain alias.')}
 async function deleteOldDeployment(env,id){if(!id)return;try{await vercelFetch(env,`/v13/deployments/${encodeURIComponent(id)}`,{method:'DELETE'})}catch(e){console.warn('Old concept deployment cleanup failed',String(e?.message||e))}}
+function readResearch(p){try{return p.research_json?JSON.parse(p.research_json):null}catch{return null}}
 
 async function buildConcept(request,env,id){
   if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503);
@@ -115,12 +125,20 @@ async function buildConcept(request,env,id){
     p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();
   }
 
+  const research=readResearch(p);
+  if(research?.identity_confidence==='low'){
+    const message='Business research identity confidence is low. Review or rerun research before building the concept.';
+    await env.DB.prepare(`UPDATE prospects SET concept_state='Build Failed',concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(message,id).run();
+    await recordActivity(env,user,p,`Concept build blocked for ${p.business_name}`,{reason:'low_identity_confidence'},'concept_build');
+    return json({ok:false,error:message,requires_review:true},409);
+  }
+
   const classification=classifyVisualFamily(p),system=getVisualSystem(p,classification),slug=slugify(p.concept_slug||p.business_name);
   if(!slug)return json({ok:false,error:'Could not create a valid concept subdomain from the business name.'},400);
   const alias=`${slug}.cajunsites.com`,conceptUrl=`https://${alias}`,oldDeploymentId=clean(p.concept_deployment_id,255)||null;
 
   await env.DB.prepare(`UPDATE prospects SET concept_state='Building',concept_slug=?,concept_build_error=NULL,visual_family=?,visual_version=?,visual_variant=?,visual_classifier_score=?,visual_classifier_signal=?,visual_fallback=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(slug,classification.family,system.version,system.variant,classification.score,classification.signal,classification.fallback?1:0,id).run();
-  await recordActivity(env,user,p,`${user.name} started concept build for ${p.business_name}`,{slug,visual_family:classification.family,visual_version:system.version,visual_variant:system.variant,classifier_score:classification.score,classifier_hits:classification.hits,fallback:classification.fallback});
+  await recordActivity(env,user,p,`${user.name} started concept build for ${p.business_name}`,{slug,visual_family:classification.family,visual_version:system.version,visual_variant:system.variant,classifier_score:classification.score,classifier_hits:classification.hits,fallback:classification.fallback,identity_confidence:research?.identity_confidence||'unknown',google_rating:research?.google_reviews?.rating||null,google_review_count:research?.google_reviews?.count||null});
 
   try{
     const html=buildConceptDocument(p,classification);
@@ -128,9 +146,9 @@ async function buildConcept(request,env,id){
     if(!deploymentId)throw new Error('Vercel did not return a deployment ID.');
     await waitReady(env,deploymentId);await ensureDns(env,slug);await ensureDomain(env,alias);await assignAlias(env,deploymentId,alias);
     await env.DB.prepare(`UPDATE prospects SET concept_url=?,concept_state='Built',concept_slug=?,concept_deployment_id=?,concept_build_error=NULL,concept_built_at=CURRENT_TIMESTAMP,visual_family=?,visual_version=?,visual_variant=?,visual_classifier_score=?,visual_classifier_signal=?,visual_fallback=?,stage=CASE WHEN stage='Qualified' THEN 'Concept Built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(conceptUrl,slug,deploymentId,classification.family,system.version,system.variant,classification.score,classification.signal,classification.fallback?1:0,id).run();
-    await recordActivity(env,user,p,`${user.name} built concept site for ${p.business_name}`,{slug,concept_url:conceptUrl,deployment_id:deploymentId,visual_family:classification.family,visual_version:system.version,visual_variant:system.variant,classifier_score:classification.score,fallback:classification.fallback});
+    await recordActivity(env,user,p,`${user.name} built concept site for ${p.business_name}`,{slug,concept_url:conceptUrl,deployment_id:deploymentId,visual_family:classification.family,visual_version:system.version,visual_variant:system.variant,classifier_score:classification.score,fallback:classification.fallback,identity_confidence:research?.identity_confidence||'unknown'});
     if(oldDeploymentId&&oldDeploymentId!==deploymentId)await deleteOldDeployment(env,oldDeploymentId);
-    return json({ok:true,concept_url:conceptUrl,visual_family:classification.family,visual_label:classification.label,visual_version:system.version,visual_variant:system.variant,classifier_score:classification.score,fallback:classification.fallback});
+    return json({ok:true,concept_url:conceptUrl,visual_family:classification.family,visual_label:classification.label,visual_version:system.version,visual_variant:system.variant,classifier_score:classification.score,fallback:classification.fallback,identity_confidence:research?.identity_confidence||'unknown',google_reviews:research?.google_reviews||null});
   }catch(e){
     const m=clean(e?.message||e,1000);await env.DB.prepare(`UPDATE prospects SET concept_state='Build Failed',concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(m,id).run();
     await recordActivity(env,user,p,`Concept build failed for ${p.business_name}`,{error:m,visual_family:classification.family,visual_version:system.version,visual_variant:system.variant,classifier_score:classification.score,fallback:classification.fallback});
