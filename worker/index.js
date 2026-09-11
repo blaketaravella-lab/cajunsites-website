@@ -7,6 +7,8 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 });
 
 const clean = (value, max = 2000) => String(value ?? '').trim().slice(0, max);
+const CAJUNSITES_PAYMENT_LINK_ID = 'plink_1UETwWINepSxCPJz8VjC4MSO';
+const STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300;
 
 async function parseRequestData(request) {
   const type = request.headers.get('content-type') || '';
@@ -52,6 +54,218 @@ async function verifyTurnstile(request, env, data, expectedAction) {
   }
 
   return { ok: true };
+}
+
+function parseStripeSignature(header) {
+  const parts = String(header || '').split(',').map((part) => part.trim());
+  const timestampPart = parts.find((part) => part.startsWith('t='));
+  const signatures = parts
+    .filter((part) => part.startsWith('v1='))
+    .map((part) => part.slice(3));
+
+  return {
+    timestamp: timestampPart ? Number(timestampPart.slice(2)) : NaN,
+    signatures,
+  };
+}
+
+function hexFromBytes(bytes) {
+  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function constantTimeHexEqual(left, right) {
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+async function verifyStripeWebhookSignature(rawBody, signatureHeader, secret) {
+  const { timestamp, signatures } = parseStripeSignature(signatureHeader);
+  if (!Number.isFinite(timestamp) || !signatures.length) return false;
+
+  const age = Math.abs(Math.floor(Date.now() / 1000) - timestamp);
+  if (age > STRIPE_SIGNATURE_TOLERANCE_SECONDS) return false;
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+
+  const signedPayload = `${timestamp}.${rawBody}`;
+  const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload));
+  const expected = hexFromBytes(digest);
+
+  return signatures.some((signature) => constantTimeHexEqual(expected, signature));
+}
+
+async function sendCustomerWelcome(env, customer) {
+  if (!env.CUSTOMER_EMAIL) {
+    throw new Error('CUSTOMER_EMAIL binding is not configured');
+  }
+
+  const firstName = clean(customer.customer_name, 120).split(/\s+/)[0] || 'there';
+  const businessName = clean(customer.business_name, 160) || 'your business';
+  const onboardingUrl = 'https://cajunsites.com/onboarding/';
+
+  const text = [
+    `Hi ${firstName},`,
+    '',
+    `Thank you for choosing CajunSites for ${businessName}. Your payment was received and your website project is now in our queue.`,
+    '',
+    'The next step is to complete your customer onboarding form. This gives us the business details, services, contact information, photos, branding, and other information we need to build your site.',
+    '',
+    `Complete your onboarding here: ${onboardingUrl}`,
+    '',
+    'Once we receive your onboarding information, we will review it and begin the website build. If anything important is missing, we will contact you before moving forward.',
+    '',
+    'Thank you,',
+    'CajunSites',
+    'Websites Built for Small Business',
+    'hello@cajunsites.com',
+  ].join('\n');
+
+  await env.CUSTOMER_EMAIL.send({
+    from: 'hello@cajunsites.com',
+    to: customer.email,
+    subject: 'Welcome to CajunSites - Next Step: Customer Onboarding',
+    text,
+  });
+}
+
+async function processSuccessfulCheckout(session, env) {
+  if (session.payment_link !== CAJUNSITES_PAYMENT_LINK_ID) {
+    console.log('Ignoring Checkout Session from another Payment Link', session.id);
+    return { ignored: true };
+  }
+
+  if (session.payment_status !== 'paid') {
+    console.log('Checkout Session not paid yet', session.id, session.payment_status);
+    return { ignored: true };
+  }
+
+  if (!env.DB) throw new Error('DB binding is not configured');
+
+  const details = session.customer_details || {};
+  const email = clean(details.email || session.customer_email, 254).toLowerCase();
+  const customerName = clean(details.name, 120);
+  const businessName = clean(details.business_name || details.name, 160);
+  const stripeCustomerId = clean(session.customer, 255) || null;
+  const subscriptionId = clean(session.subscription, 255) || null;
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error(`Checkout Session ${session.id} does not contain a valid customer email`);
+  }
+
+  const insert = await env.DB.prepare(`
+    INSERT OR IGNORE INTO customers (
+      stripe_customer_id,
+      stripe_checkout_session_id,
+      stripe_subscription_id,
+      payment_link_id,
+      customer_name,
+      business_name,
+      email,
+      status,
+      onboarding_completed,
+      welcome_email_sent,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Paid - Awaiting Onboarding', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).bind(
+    stripeCustomerId,
+    session.id,
+    subscriptionId,
+    session.payment_link,
+    customerName,
+    businessName,
+    email,
+  ).run();
+
+  const customer = await env.DB.prepare(`
+    SELECT * FROM customers WHERE stripe_checkout_session_id = ? LIMIT 1
+  `).bind(session.id).first();
+
+  if (!customer) throw new Error(`Customer record could not be loaded for Checkout Session ${session.id}`);
+
+  if (!customer.welcome_email_sent) {
+    await sendCustomerWelcome(env, customer);
+    await env.DB.prepare(`
+      UPDATE customers
+      SET welcome_email_sent = 1, updated_at = CURRENT_TIMESTAMP
+      WHERE stripe_checkout_session_id = ?
+    `).bind(session.id).run();
+  }
+
+  if ((insert.meta?.changes || 0) > 0) {
+    const internalText = [
+      'New paid CajunSites customer',
+      '',
+      `Customer: ${customer.customer_name || 'Not provided'}`,
+      `Business: ${customer.business_name || 'Not provided'}`,
+      `Email: ${customer.email}`,
+      `Status: ${customer.status}`,
+      `Stripe customer: ${customer.stripe_customer_id || 'Not provided'}`,
+      `Stripe subscription: ${customer.stripe_subscription_id || 'Not provided'}`,
+      `Checkout session: ${customer.stripe_checkout_session_id}`,
+      '',
+      'Customer welcome email: sent',
+      'Onboarding: https://cajunsites.com/onboarding/',
+    ].join('\n');
+
+    await env.SEND_EMAIL.send({
+      from: 'hello@cajunsites.com',
+      to: 'blaketaravella@gmail.com',
+      subject: `Paid CajunSites customer: ${customer.business_name || customer.email}`,
+      text: internalText,
+    });
+  }
+
+  return { ignored: false, customerId: customer.id };
+}
+
+async function handleStripeWebhook(request, env) {
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    console.error('STRIPE_WEBHOOK_SECRET is not configured');
+    return json({ ok: false, error: 'Webhook is not configured.' }, 503);
+  }
+
+  const signature = request.headers.get('stripe-signature');
+  if (!signature) return json({ ok: false, error: 'Missing Stripe signature.' }, 400);
+
+  const rawBody = await request.text();
+  const verified = await verifyStripeWebhookSignature(rawBody, signature, env.STRIPE_WEBHOOK_SECRET);
+  if (!verified) {
+    console.warn('Stripe webhook signature verification failed');
+    return json({ ok: false, error: 'Invalid Stripe signature.' }, 400);
+  }
+
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    return json({ ok: false, error: 'Invalid JSON payload.' }, 400);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+      await processSuccessfulCheckout(event.data.object, env);
+    }
+
+    return json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook processing error', {
+      eventId: event.id || null,
+      eventType: event.type || null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return json({ ok: false, error: 'Webhook processing failed.' }, 500);
+  }
 }
 
 async function handleLead(request, env) {
@@ -220,6 +434,11 @@ export default {
     if (url.hostname === 'www.cajunsites.com') {
       url.hostname = 'cajunsites.com';
       return Response.redirect(url.toString(), 301);
+    }
+
+    if (url.pathname === '/api/stripe-webhook') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405);
+      return handleStripeWebhook(request, env);
     }
 
     if (url.pathname === '/api/lead') {
