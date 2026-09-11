@@ -140,6 +140,19 @@ async function ensureProspectDns(env, slug) {
   return data;
 }
 
+async function ensureVercelProjectDomain(env, alias) {
+  try {
+    return await vercelFetch(env, `/v10/projects/${encodeURIComponent(VERCEL_CONCEPT_PROJECT)}/domains`, {
+      method: 'POST',
+      body: JSON.stringify({ name: alias }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/already exists|already added|domain.*exists/i.test(message)) return { name: alias, existing: true };
+    throw error;
+  }
+}
+
 async function waitForDeployment(env, deploymentId) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const data = await vercelFetch(env, `/v13/deployments/${encodeURIComponent(deploymentId)}`);
@@ -149,6 +162,25 @@ async function waitForDeployment(env, deploymentId) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   throw new Error('Vercel deployment did not become ready in time. Try Build Concept again to check/redeploy.');
+}
+
+async function assignAliasWithRetry(env, deploymentId, alias) {
+  let lastError;
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    try {
+      return await vercelFetch(env, `/v2/deployments/${encodeURIComponent(deploymentId)}/aliases`, {
+        method: 'POST',
+        body: JSON.stringify({ alias }),
+      });
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const mayProvision = /ssl|certificate|domain|verification|not configured/i.test(message);
+      if (!mayProvision || attempt === 14) throw error;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  throw lastError || new Error('Could not assign the concept domain alias.');
 }
 
 async function buildConcept(request, env, id) {
@@ -189,10 +221,8 @@ async function buildConcept(request, env, id) {
 
     await waitForDeployment(env, deploymentId);
     await ensureProspectDns(env, slug);
-    await vercelFetch(env, `/v2/deployments/${encodeURIComponent(deploymentId)}/aliases`, {
-      method: 'POST',
-      body: JSON.stringify({ alias }),
-    });
+    await ensureVercelProjectDomain(env, alias);
+    await assignAliasWithRetry(env, deploymentId, alias);
 
     await env.DB.prepare(`UPDATE prospects SET concept_url=?,concept_state='Built',concept_slug=?,concept_deployment_id=?,concept_build_error=NULL,concept_built_at=CURRENT_TIMESTAMP,stage=CASE WHEN stage='Qualified' THEN 'Concept Built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
       .bind(conceptUrl,slug,deploymentId,id).run();
