@@ -1,0 +1,14 @@
+---
+import AdminShell from '../../components/AdminShell.astro';
+---
+<AdminShell title="Settings" eyebrow="Platform" description="Review CajunSites operational configuration and production service connections." active="settings">
+  <div class="admin-grid">
+    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Customer Database</h3><p>Cloudflare D1</p><p style="margin-bottom:0"><strong>Database:</strong> cajunsites-production</p></div>
+    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Payments</h3><p>Stripe Checkout and recurring billing</p><p style="margin-bottom:0"><strong>Offer:</strong> $499 launch + $49/month</p></div>
+    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Transactional Email</h3><p>Resend using the verified CajunSites domain.</p><p style="margin-bottom:0"><strong>Sender:</strong> hello@cajunsites.com</p></div>
+    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Form Protection</h3><p>Cloudflare Turnstile protects lead and onboarding submissions.</p></div>
+    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Admin Authentication</h3><p>Password-protected dashboard with secure HttpOnly session cookie.</p></div>
+    <div class="admin-card"><span class="pill gold">Pending Review</span><h3 style="margin-top:12px">Stripe Tax</h3><p>Automatic tax remains disabled pending final Louisiana tax treatment confirmation.</p></div>
+  </div>
+  <div class="admin-card" style="margin-top:14px"><h3>Security</h3><p>Runtime secrets are managed in Cloudflare and are not stored in the GitHub repository. Customer onboarding links are signed and the dashboard is excluded from search indexing.</p></div>
+</AdminShell>
