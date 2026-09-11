@@ -4,55 +4,67 @@ Date: 2026-09-11
 
 ## Executive Summary
 
-CajunSites has a working public marketing site, Stripe checkout/onboarding flow, Cloudflare Worker backend, D1 operational database, internal dashboard, prospect pipeline, automated business research, concept generation, prospect cleanup, and prospect-to-customer conversion. The project is functional enough for controlled sales validation, but several areas should be hardened before volume increases.
+CajunSites has a working public marketing site, Stripe checkout/onboarding flow, Cloudflare Worker backend, D1 operational database, internal dashboard, prospect pipeline, automated business research, concept generation, prospect cleanup, and prospect-to-customer conversion. The platform is suitable for controlled sales validation, but several areas should be hardened before customer volume increases.
 
-The highest priorities are: protect `/admin/*` at the server or Cloudflare Access layer, unify internal-user password hashing, make Stripe subscription state authoritative for billing metrics and lifecycle exceptions, consolidate the concept build router, formalize D1 migrations, and add automated Worker tests/validation to CI.
+During this audit, three immediate issues were corrected: prospect deletion now fails closed when concept assets cannot be cleaned up, internal login now accepts both password formats currently produced by the application, and CI now syntax-checks all Worker JavaScript in addition to building Astro.
+
+The highest remaining priorities are server-side protection of `/admin/*`, one explicitly versioned password-storage scheme with a dedicated pepper, Stripe subscription-state synchronization, a consolidated concept-factory/classifier, canonical D1 migrations, and broader Worker behavior tests.
+
+## Changes Completed During This Audit
+
+### Prospect cleanup now fails closed
+
+Built concepts require Vercel and DNS cleanup credentials. If cleanup fails, the D1 prospect record remains instead of silently orphaning concept assets. Customer-linked prospects remain protected from deletion.
+
+### Internal password compatibility restored
+
+The login path now checks the HMAC format used by the current authentication/bootstrap path and also accepts PBKDF2 records produced by the original Add User/Reset Password path. This fixes the immediate risk of user-management actions creating credentials that cannot log in.
+
+This is a compatibility measure, not the final cryptographic design. The target remains one explicitly versioned password scheme shared by bootstrap, login, Add User, Reset Password, and future password changes, with a dedicated password pepper separate from any bootstrap credential.
+
+### Worker syntax validation added to CI
+
+GitHub Actions now runs `node --check` against every `worker/*.js` file before the Astro build. This catches syntax errors that an Astro-only build would miss.
 
 ## Priority 0: Security and Data Integrity
 
 ### Protect the dashboard server-side
 
-Admin pages are static Astro assets. The login overlay protects API data, but the HTML for pages such as Documentation, Settings, Templates, and dashboard structure can still be requested directly because Worker-first routing currently applies to `/api/*`, not `/admin/*`.
+Admin pages are static Astro assets. The login overlay protects API data, but the HTML for Documentation, Settings, Templates, and other dashboard pages can still be requested directly because Worker-first asset routing currently applies to `/api/*`, not `/admin/*`.
 
-Recommended end state: protect `/admin/*` with Cloudflare Access or route `/admin/*` through the Worker and require a valid admin session before serving dashboard assets. `noindex` is not an access control.
+Recommended end state: protect `/admin/*` with Cloudflare Access or route `/admin/*` through authenticated Worker handling. `noindex` is not an access control.
 
-### Unify password hashing
+### Finish password-storage consolidation
 
-`worker/auth.js` verifies passwords with HMAC-SHA256 using `ADMIN_DASHBOARD_PASSWORD` as a server-side key, while `worker/app.js` still creates and resets user passwords with PBKDF2. This can create accounts whose passwords cannot be verified by the login path.
+Current login compatibility handles both HMAC and PBKDF2 records, but maintaining two implicit formats is technical debt. Add an explicit hash scheme/version and migrate to one shared implementation.
 
-Recommended end state: one shared password module used by bootstrap, login, Add User, Reset Password, and future password changes. Store an explicit hash scheme/version per user if migration between schemes is required.
-
-Also separate the dashboard password pepper from the bootstrap owner password. A runtime secret should not act both as a login credential and as the cryptographic pepper for every internal user.
+Also separate the password pepper from the bootstrap owner credential. A runtime secret should not serve both purposes.
 
 ### Add login throttling
 
 Admin login has no application-level failed-login throttling. Add Cloudflare rate limiting or a D1/KV-backed attempt policy per IP and normalized email.
 
-### Make prospect deletion fail closed
-
-Prospect deletion now requires Vercel and DNS cleanup credentials when a concept exists. If external asset cleanup cannot be completed, the prospect record must remain in D1 rather than silently orphaning assets.
-
 ## Priority 1: Payments, Webhooks, and Customer Lifecycle
 
 ### Synchronize subscription state
 
-The Worker currently centers on successful Checkout Session events. Add handling for recurring payment failures, successful recovery, subscription cancellation, and relevant refund events. Customer lifecycle should not depend entirely on manual dashboard changes after checkout.
-
-Suggested Stripe events include the appropriate `invoice.*`, `customer.subscription.*`, and refund/payment events for the final billing design.
+The Worker currently centers on successful Checkout Session events. Add handling for recurring payment failures, successful recovery, subscription cancellation, and relevant refund events. Customer billing state should not depend entirely on manual dashboard changes after checkout.
 
 ### Do not calculate financial analytics from customer count alone
 
-Dashboard MRR currently assumes every non-cancelled customer contributes $49/month, and launch revenue assumes every customer represents $499 of earned launch revenue. Replace these estimates with Stripe-derived subscription/payment state or clearly label them as model estimates.
-
-`Payment Issue` customers should not automatically be treated as healthy MRR.
+Dashboard MRR currently assumes every non-cancelled customer contributes $49/month, and launch revenue assumes every customer represents $499. Replace these estimates with Stripe-derived subscription/payment state or clearly label them as model estimates. `Payment Issue` should not count as healthy recurring revenue.
 
 ### Make prospect conversion webhook repairable
 
-The conversion wrapper calls the base signed webhook handler first and then links a prospect to the new customer. Conversion-finalization errors are logged after the base webhook can already return success. A prospect-referenced event should either fail the webhook so Stripe retries, or write a durable reconciliation record that can be retried safely.
+The conversion wrapper calls the base signed webhook handler first and then links a prospect to the customer. A conversion-finalization error can occur after the base handler has already produced a successful response. A prospect-referenced event should either fail so Stripe retries, or write a durable reconciliation job/state that can be retried safely.
 
 ### Track internal notification state separately
 
-The welcome email has a persisted sent flag. The internal paid-customer notification does not have equivalent durable state and is only attempted on the first inserted customer row. Add a separate notification state so retries can recover from transient email failures.
+The welcome email has a persisted sent flag. The internal paid-customer notification does not have equivalent durable state and is attempted only when the customer row is first inserted. Add a separate notification state so transient failures can be retried.
+
+### Make onboarding persistence atomic/recoverable
+
+The base onboarding handler can update the customer to `Onboarding Received` and return success before the dashboard wrapper persists the detailed onboarding payload. If payload persistence fails, status and stored intake can diverge. Move onboarding persistence into one transaction-like operation where possible, or add a durable retry/reconciliation path.
 
 ## Priority 1: Concept Factory
 
@@ -62,11 +74,11 @@ Current Worker request routing is layered through multiple Worker-like wrappers:
 
 `prospect-cleanup -> vertical-concepts -> conversion -> concept-factory -> prospects -> auth -> app -> index`
 
-This works, but route ownership and failure behavior are increasingly difficult to reason about. Refactor toward one top-level router that imports focused service functions instead of repeatedly forwarding `Request` objects through nested `fetch()` implementations.
+This works, but route ownership and error propagation are becoming difficult to reason about. Refactor toward one top-level router that imports focused service functions rather than forwarding Requests through nested `fetch()` implementations.
 
 ### Use one multi-signal vertical classifier for every concept
 
-The new Car Wash path correctly evaluates researched vertical, prospect category, verified services, and suggested sections. The base concept factory still relies primarily on a single selected vertical/category value.
+The Car Wash path correctly evaluates researched vertical, prospect category, verified services, and suggested sections. The base concept factory still primarily selects one vertical/category value.
 
 Move multi-signal classification into the core concept factory and use it for all visual families.
 
@@ -85,7 +97,7 @@ Recommended first-class visual families:
 - Professional Services
 - Home Services / Trades
 - Restaurant / Food Service when intentionally supported
-- Generic Local Business only as a visible fallback
+- Generic Local Business only as an explicit fallback
 
 ### Make fallback visible
 
@@ -93,68 +105,66 @@ If no specialized family matches, store `visual_family=generic` and show a warni
 
 ### Reduce same-industry repetition
 
-Each visual family should have a small curated image pool, layout variants, hero treatments, CTA variants, and section-order variants. Select deterministically from the prospect ID or slug so rebuilds are stable but different businesses in the same vertical do not look identical.
+Each visual family should have a curated image pool, layout variants, hero treatments, CTA variants, and section-order variants. Select deterministically from prospect ID or slug so rebuilds are stable while different businesses in the same vertical do not all look identical.
 
 ### Validate imagery before deployment
 
-External image URLs should be checked during the build. If an image is unavailable, use a known-good family fallback. Long-term, consider copying approved concept imagery into controlled deployment assets instead of depending entirely on remote image URLs.
+External image URLs should be checked during build. If an image is unavailable, use a known-good family fallback. Longer term, consider packaging approved concept imagery into controlled deployment assets rather than depending entirely on remote image URLs.
 
 ### Use research quality as an input
 
-Research should include an identity-confidence result. Before concept generation, compare business name, city/state, phone/address, and source consistency. If confidence is low, require manual review instead of building persuasive copy from a potentially incorrect business match.
+Research should include an identity-confidence result. Compare business name, city/state, phone/address, and source consistency. Low-confidence research should require manual review before generating persuasive concept copy.
 
-### Preserve prior deployments or clean them intentionally
+### Clean or track prior concept deployments
 
-A rebuild creates a new Vercel deployment and replaces `concept_deployment_id`. The previous deployment is not tracked in D1 and can remain in Vercel. Either delete the previous deployment after the replacement is ready and aliased, or add a deployment-history table and explicit retention policy.
+A rebuild creates a new Vercel deployment and replaces `concept_deployment_id`. The previous deployment is not tracked in D1 and can remain in Vercel. Either delete the previous deployment after the replacement is ready and aliased, or add deployment history plus a retention policy.
 
 ### Surface research/build quality
 
-Store and show:
+Store and display:
 
 - visual family
 - classifier signal
-- research confidence
-- number of verified services/facts/sources
-- image source/selection
+- research identity confidence
+- verified service/fact/source counts
+- selected imagery
 - build version
 - generic-fallback warning
-
-This makes the concept factory observable instead of opaque.
 
 ## Priority 1: Database and Migrations
 
 ### Add the missing base schema migration
 
-The tracked migrations begin at `0002_admin_dashboard.sql`. Add a canonical `0001` migration for the `customers` table and any other original production objects so a new environment can be recreated from source control.
+Tracked migrations begin at `0002_admin_dashboard.sql`. Add a canonical `0001` migration for the original `customers` table and other base objects so a new environment can be recreated from source control.
 
 ### Stop request-time schema mutation
 
-Several Worker modules issue `CREATE TABLE` or `ALTER TABLE` statements during normal requests. This helped bootstrap quickly, but production should use explicit migrations and a schema version table. Runtime requests should verify required schema, not alter it.
+Several Worker modules issue `CREATE TABLE` or `ALTER TABLE` statements during normal requests. This was useful during rapid bootstrap, but production should use explicit migrations plus a schema-version mechanism. Runtime requests should verify required schema, not alter it.
 
 ### Add a migration for research fields
 
-Research columns are currently added by runtime logic rather than a tracked migration. Add a migration for `research_status`, `business_vertical`, `research_json`, `research_error`, and `researched_at`.
+Research columns are currently created by runtime logic rather than a tracked migration. Add a safe forward migration for `research_status`, `business_vertical`, `research_json`, `research_error`, and `researched_at` after reconciling columns already created in production.
 
-### Separate seed data from schema migrations
+### Separate seed data from schema migrations/runtime
 
-`0005_prospects.sql` contains the initial prospect list, and `prospects.js` can repopulate the list if the table becomes empty. Production schema migrations should not silently recreate sales prospects. Move seed data into an explicit development/bootstrap script and remove runtime auto-seeding.
+`0005_prospects.sql` contains the initial prospect list, and `prospects.js` can repopulate all initial prospects if the table becomes empty. This means an intentionally emptied production pipeline can silently be repopulated. Move prospect seeds to an explicit development/bootstrap action and remove runtime auto-seeding.
 
 ### Add relational integrity where practical
 
-`prospects.customer_id` and `customers.source_prospect_id` are protected by unique indexes but not by explicit foreign keys. Define intended delete/update behavior and add constraints in a forward migration where D1 migration limitations permit it.
+`prospects.customer_id` and `customers.source_prospect_id` use unique indexes but not explicit foreign keys. Define intended delete/update behavior and add constraints in a forward migration where D1 limitations permit it.
 
 ## Priority 2: Dashboard
 
-### Protect and personalize the dashboard shell
+### Protect and personalize the shell
 
-- Keep the approved compact sidebar and Prospect Details design direction.
+- Keep the compact sidebar and current Prospect Details design direction.
 - Add a mobile-accessible Sign Out control. The desktop topbar is hidden below 900px, which currently removes the visible Sign Out button.
-- Format activity timestamps for the operator's local time instead of exposing raw database timestamps.
-- Add loading, empty, and actionable error states consistently rather than silently swallowing `catch` blocks.
+- Format all activity timestamps for the operator rather than exposing raw database timestamps.
+- Replace silent `catch {}` blocks with visible error and retry states.
 
 ### Make Overview prospect-aware
 
-Overview currently focuses mostly on customers. Add:
+Add:
 
 - prospects needing first contact
 - overdue follow-ups
@@ -165,7 +175,7 @@ Overview currently focuses mostly on customers. Add:
 
 ### Improve Analytics
 
-Add prospect funnel and conversion metrics:
+Add prospect funnel metrics:
 
 - Qualified -> Concept Built
 - Concept Built -> Contacted
@@ -178,80 +188,87 @@ Add prospect funnel and conversion metrics:
 
 Add fulfillment metrics:
 
-- average time from payment to onboarding
+- payment to onboarding
 - onboarding to Ready to Build
 - Ready to Build to Customer Review
 - approval to launch
 - revisions per customer
 
-Financial metrics should eventually be sourced from Stripe rather than inferred from customer count.
+Financial metrics should ultimately come from Stripe rather than inferred customer counts.
 
 ### Replace hardcoded Settings health cards
 
-Several Settings cards always display `Configured`. Add a protected `/api/admin/health` endpoint that checks whether required bindings/secrets are present and whether D1/Vercel/DNS/Resend/OpenAI dependencies can be safely validated without exposing secret values.
+Several Settings cards always display `Configured`. Add a protected `/api/admin/health` endpoint that safely checks bindings and dependencies without exposing secret values.
 
-### Make Templates reflect the real visual system
+### Make Templates reflect actual visual families
 
-The Templates page currently shows three broad static foundations, while the concept factory has more granular vertical behavior. Replace or supplement this with a Visual Families registry showing each supported family, version, imagery set, CTA pattern, and fallback status.
+The Templates page currently shows three broad foundations while the concept factory supports more granular visual behavior. Replace or supplement it with a Visual Families registry showing supported families, version, imagery strategy, CTA pattern, and fallback status.
 
 ### Add operational ownership and due dates
 
-As customer volume grows, Build Queue should support owner/assignee, due date, blocked reason, and last-action timestamp.
+As volume grows, Build Queue should support assignee, due date, blocked reason, priority, and last-action timestamp.
 
 ## Priority 2: Public Funnel and Onboarding
 
+### Normalize offer naming
+
+The current internal standard is `Hosting & Maintenance`, while parts of the public homepage still use `Website Hosting & Support`. Choose one canonical customer-facing name and use it consistently in metadata, structured data, hero pricing, pricing cards, Stripe naming, Terms, and dashboard documentation.
+
 ### Persist marketing leads
 
-The Get Started form currently delivers email. Also persist qualified inquiries into D1 or create a Prospect record so marketing leads are not disconnected from the dashboard pipeline.
+The Get Started form currently sends email but does not create a dashboard prospect. Persist inquiries to D1 or create a Prospect record so inbound leads are not disconnected from operations.
 
 ### Improve onboarding asset collection
 
-The onboarding form currently relies on shared links for logos/photos. That is workable for launch, but direct secure upload would improve completion rate and reduce inaccessible-share-link problems.
+The onboarding form relies on shared links for logos/photos. Secure direct upload would reduce inaccessible-share-link problems and improve completion.
 
-### Version onboarding and signed links
+### Version onboarding signed links
 
-Use a dedicated onboarding signing secret rather than the Stripe webhook secret. Consider timestamped/expiring signed links or an explicit reissue process. Secret rotation should not unexpectedly invalidate every outstanding onboarding URL.
+Use a dedicated onboarding signing secret instead of the Stripe webhook secret. Consider expiration/reissue behavior so rotating the Stripe webhook secret does not unexpectedly invalidate outstanding onboarding links.
 
 ## Priority 2: Deployment and CI
 
-Current GitHub Actions validates only the Astro build. A green build does not prove Worker JavaScript parses, routes correctly, or that dashboard/concept APIs behave correctly.
+CI now performs:
 
-Minimum CI should include:
+1. dependency install
+2. JavaScript syntax checking for every `worker/*.js`
+3. Astro production build
 
-1. `npm run build`
-2. syntax checking for every `worker/*.js`
-3. a Wrangler dry-run or equivalent Worker bundle validation
-4. lightweight unit tests for vertical classification and lifecycle transitions
-5. tests for password hash consistency
-6. tests for signed onboarding token verification
-7. tests for prospect cleanup behavior
-8. tests for webhook conversion idempotency/retry behavior
+Next additions should include:
 
-Use a lockfile and deterministic install process when the dependency set grows.
+1. Wrangler bundle/dry-run validation
+2. unit tests for vertical classification and lifecycle transitions
+3. password compatibility/migration tests
+4. signed onboarding token tests
+5. prospect cleanup tests
+6. conversion webhook idempotency/retry tests
+7. smoke tests against a non-production environment
+
+A lockfile should be added so CI dependency resolution is deterministic.
 
 ## Priority 2: Repository and Configuration Hygiene
 
-The GitHub repository is currently public. No secret values should ever be committed, but the public repository exposes internal architecture, owner email, operational endpoints, Stripe Payment Link identifiers, and dashboard implementation. Consider making the repository private before customer volume increases.
+The GitHub repository is currently public. No secret values should ever be committed, but public source exposes internal architecture, owner email, operational endpoints, Payment Link identifiers, and dashboard implementation. Consider making the repository private before customer volume grows.
 
-Centralize repeated configuration such as Payment Link IDs, Vercel project name, DNS API URL, public sender email, and internal notification destination rather than hardcoding the same values across multiple Worker modules.
+Centralize repeated configuration such as Payment Link IDs, Vercel project name, DNS API URL, public sender email, and internal notification destination instead of hardcoding them across Worker modules.
 
 Add an `.env.example` or `docs/RUNTIME-CONFIG.md` containing secret names only, never values.
 
 ## Recommended Implementation Order
 
 1. Server-side protection for `/admin/*`
-2. Password hashing unification and login throttling
-3. Webhook/subscription lifecycle hardening
-4. Canonical D1 migrations and removal of runtime auto-seeding/schema changes
-5. Consolidated concept factory and multi-signal visual-family registry
-6. Old deployment cleanup and visual build observability
-7. Worker CI/tests
-8. Dashboard prospect KPIs, accurate financial metrics, health endpoint, mobile sign-out
+2. Versioned/shared password hashing plus login throttling
+3. Stripe subscription/payment lifecycle synchronization and webhook reconciliation
+4. Canonical D1 migrations and removal of runtime auto-seeding/schema mutation
+5. Consolidated concept factory with one multi-signal visual-family registry
+6. Prior deployment cleanup and concept observability
+7. Worker bundle/unit/smoke tests
+8. Dashboard prospect KPIs, accurate financial metrics, health endpoint, and mobile sign-out
 9. Lead persistence and onboarding upload improvements
-10. Repository privacy/configuration cleanup
+10. Repository privacy and configuration centralization
 
 ## Current Build-Concept Standard
 
-A concept is a personalized sales preview, not the final production website. Concept generation may use representative stock imagery, but the image must match the business vertical and must never imply that the pictured people, vehicles, building, work product, certifications, awards, or credentials belong to the prospect unless independently verified.
+A concept is a personalized sales preview, not the final production website. Representative stock imagery must match the business vertical and must never imply that pictured people, vehicles, buildings, work products, certifications, awards, or credentials belong to the prospect unless independently verified.
 
-The final production website must use customer-approved facts and assets, undergo internal QA, and follow the normal customer lifecycle before launch.
+The final production website must use customer-approved facts/assets, undergo internal QA, and follow the normal customer lifecycle before launch.
