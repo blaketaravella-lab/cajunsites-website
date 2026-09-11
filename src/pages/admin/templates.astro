@@ -2,10 +2,13 @@
 import AdminShell from '../../components/AdminShell.astro';
 ---
 <AdminShell title="Templates" eyebrow="Website Factory" description="Manage the standardized site foundations used to produce customer websites quickly and consistently." active="templates">
+  <style>
+    .template-card{display:grid;gap:10px;align-content:start;min-height:210px}.template-card h3{margin:0;font-size:1.1rem}.template-card p{margin:0;color:var(--muted)}.template-card strong{color:var(--ink)}.template-meta{margin-top:auto;padding-top:12px;border-top:1px solid var(--line);font-size:.84rem}.standard{margin-top:14px;background:linear-gradient(180deg,#fff,#fcf9fd)}.standard p{margin:0;color:var(--muted)}
+  </style>
   <div class="admin-grid">
-    <div class="admin-card"><span class="pill green">Primary</span><h3 style="margin-top:12px">Local Service Business</h3><p>Default five-page structure for home services, trades, repair, cleaning, and similar businesses.</p><p><strong>Pages:</strong> Home, Services, About, Reviews, Contact</p></div>
-    <div class="admin-card"><span class="pill">Available</span><h3 style="margin-top:12px">Professional Services</h3><p>Cleaner content-forward variation for consultants, firms, and appointment-based professional businesses.</p><p><strong>Focus:</strong> credibility, services, lead generation</p></div>
-    <div class="admin-card"><span class="pill">Available</span><h3 style="margin-top:12px">Beauty & Wellness</h3><p>Visual-first variation for salons, massage, hair restoration, and appointment-driven businesses.</p><p><strong>Focus:</strong> services, imagery, contact/booking CTA</p></div>
+    <div class="admin-card template-card"><span class="pill green">Primary</span><h3>Local Service Business</h3><p>Default five-page structure for home services, trades, repair, cleaning, and similar businesses.</p><div class="template-meta"><strong>Pages:</strong> Home, Services, About, Reviews, Contact</div></div>
+    <div class="admin-card template-card"><span class="pill gray">Available</span><h3>Professional Services</h3><p>Cleaner content-forward variation for consultants, firms, and appointment-based professional businesses.</p><div class="template-meta"><strong>Focus:</strong> credibility, services, lead generation</div></div>
+    <div class="admin-card template-card"><span class="pill gray">Available</span><h3>Beauty & Wellness</h3><p>Visual-first variation for salons, massage, hair restoration, and appointment-driven businesses.</p><div class="template-meta"><strong>Focus:</strong> services, imagery, contact/booking CTA</div></div>
   </div>
-  <div class="admin-card" style="margin-top:14px"><h3>Template Standard</h3><p>All CajunSites templates inherit the same production requirements: mobile-first layout, SEO foundation, SSL, contact/quote path, domain connection support, accessible structure, and reusable configuration-driven content.</p><p style="margin-bottom:0;color:#786c80">Template editing and automated site provisioning will be connected here as the website factory is built out.</p></div>
+  <div class="admin-card standard"><span class="pill gold">Standard</span><h3 style="margin-top:12px">Template Standard</h3><p>All CajunSites templates inherit the same production requirements: mobile-first layout, SEO foundation, SSL, contact/quote path, domain connection support, accessible structure, and reusable configuration-driven content.</p><p style="margin-top:10px">Template editing and automated site provisioning will be connected here as the website factory is built out.</p></div>
 </AdminShell>
