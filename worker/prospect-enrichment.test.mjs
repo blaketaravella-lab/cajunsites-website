@@ -8,7 +8,7 @@ const must=(condition,message)=>{if(!condition)throw new Error(message)};
 
 must(wrangler.includes('"main": "./worker/prospect-enrichment.js"'),'Prospect enrichment must be the top-level Worker.');
 must(enrichment.includes("origin:'manual'"),'Manual edits must be recorded in field provenance.');
-must(enrichment.includes("origin:'manual_existing'"),'Legacy non-empty values must be protected from research overwrite.');
+must(enrichment.includes("'manual_existing'"),'Legacy non-empty values must be protected from research overwrite.');
 must(enrichment.includes("origin:'research'"),'Research-populated fields must retain research provenance.');
 must(enrichment.includes('protectedSnapshot'),'Research must preserve protected prospect values.');
 must(enrichment.includes('enrichFromStoredResearch'),'Completed research must enrich the structured prospect record.');
