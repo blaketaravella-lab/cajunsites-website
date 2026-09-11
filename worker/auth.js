@@ -40,7 +40,7 @@ async function sha256Hex(value) {
   return bytesToHex(digest);
 }
 
-async function passwordHash(password, saltHex, env) {
+async function hmacPasswordHash(password, saltHex, env) {
   if (!env.ADMIN_DASHBOARD_PASSWORD) throw new Error('Authentication pepper is not configured');
   const key = await crypto.subtle.importKey(
     'raw',
@@ -55,6 +55,28 @@ async function passwordHash(password, saltHex, env) {
     new TextEncoder().encode(`${saltHex}:${String(password)}`),
   );
   return bytesToHex(signature);
+}
+
+async function pbkdf2PasswordHash(password, saltHex) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(password)), 'PBKDF2', false, ['deriveBits']);
+  const salt = Uint8Array.from(String(saltHex || '').match(/.{1,2}/g) || [], byte => parseInt(byte, 16));
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 210000 }, key, 256);
+  return bytesToHex(bits);
+}
+
+async function passwordMatches(password, user, env) {
+  const hmacHash = await hmacPasswordHash(password, user.password_salt, env);
+  if (constantTimeEqual(hmacHash, user.password_hash)) return true;
+
+  // Compatibility for accounts created/reset by the original app.js user-management path.
+  // Keep this until password storage is migrated to one explicitly versioned scheme.
+  try {
+    const pbkdf2Hash = await pbkdf2PasswordHash(password, user.password_salt);
+    return constantTimeEqual(pbkdf2Hash, user.password_hash);
+  } catch (error) {
+    console.warn('PBKDF2 compatibility verification failed', error instanceof Error ? error.message : String(error));
+    return false;
+  }
 }
 
 async function createSession(userId, env) {
@@ -89,7 +111,7 @@ async function handleLogin(request, env) {
       }
 
       const salt = randomHex(16);
-      const hash = await passwordHash(password, salt, env);
+      const hash = await hmacPasswordHash(password, salt, env);
       await env.DB.prepare(
         'INSERT INTO internal_users (email,name,role,password_salt,password_hash,is_active,created_at,updated_at) VALUES (?,?,?,?,?,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)'
       ).bind(email, clean(data.name || BOOTSTRAP_OWNER_NAME, 160), 'owner', salt, hash).run();
@@ -98,8 +120,7 @@ async function handleLogin(request, env) {
     const user = await env.DB.prepare('SELECT * FROM internal_users WHERE email=? LIMIT 1').bind(email).first();
     if (!user || !user.is_active) return json({ ok: false, error: 'Incorrect email or password.' }, 401);
 
-    const hash = await passwordHash(password, user.password_salt, env);
-    if (!constantTimeEqual(hash, user.password_hash)) {
+    if (!(await passwordMatches(password, user, env))) {
       return json({ ok: false, error: 'Incorrect email or password.' }, 401);
     }
 
@@ -118,7 +139,7 @@ async function handleLogin(request, env) {
     if (/no such table/i.test(message)) {
       return json({ ok: false, error: 'Internal user database setup is incomplete.' }, 503);
     }
-    if (/pepper|HMAC|importKey|sign/i.test(message)) {
+    if (/pepper|HMAC|PBKDF2|importKey|sign|deriveBits/i.test(message)) {
       return json({ ok: false, error: 'Password security service failed.' }, 503);
     }
     return json({ ok: false, error: `Internal login service failed: ${message.slice(0, 120)}` }, 500);
