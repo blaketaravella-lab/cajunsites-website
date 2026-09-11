@@ -21,6 +21,8 @@ import '../styles/global.css';
 <p>Complete as much as you can. If something does not apply, leave it blank. For logos and photos, paste a share link from Google Drive, Dropbox, OneDrive, iCloud, or another file-sharing service.</p>
 
 <form id="onboarding-form" method="post" action="/api/onboarding" class="form-grid">
+<input type="hidden" id="checkout_session_id" name="checkout_session_id" />
+<input type="hidden" id="onboarding_token" name="onboarding_token" />
 <div class="full"><h2>Business Details</h2></div>
 <div><label for="contact_name">Your name</label><input id="contact_name" name="contact_name" autocomplete="name" required /></div>
 <div><label for="business_name">Business name</label><input id="business_name" name="business_name" autocomplete="organization" required /></div>
@@ -85,8 +87,26 @@ import '../styles/global.css';
 const form = document.getElementById('onboarding-form');
 const button = document.getElementById('submit-button');
 const status = document.getElementById('form-status');
+const checkoutSessionField = document.getElementById('checkout_session_id');
+const onboardingTokenField = document.getElementById('onboarding_token');
+const params = new URLSearchParams(window.location.search);
+const checkoutSessionId = params.get('session') || '';
+const onboardingToken = params.get('token') || '';
+
+if (checkoutSessionField) checkoutSessionField.value = checkoutSessionId;
+if (onboardingTokenField) onboardingTokenField.value = onboardingToken;
+
+if (!checkoutSessionId || !onboardingToken) {
+  button.disabled = true;
+  status.textContent = 'Please open this form using the onboarding link in your CajunSites welcome email.';
+}
+
 form?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (!checkoutSessionField?.value || !onboardingTokenField?.value) {
+    status.textContent = 'Please use the onboarding link from your CajunSites welcome email.';
+    return;
+  }
   button.disabled = true;
   button.textContent = 'Submitting...';
   status.textContent = 'Sending your onboarding information...';
