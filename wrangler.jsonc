@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "cajunsites-website",
-  "main": "./worker/prospects.js",
+  "main": "./worker/concept-factory.js",
   "compatibility_date": "2026-09-06",
   "assets": {
     "directory": "./dist",
