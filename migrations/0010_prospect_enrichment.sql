@@ -1,0 +1,10 @@
+ALTER TABLE prospects ADD COLUMN address TEXT;
+ALTER TABLE prospects ADD COLUMN business_summary TEXT;
+ALTER TABLE prospects ADD COLUMN identity_confidence TEXT;
+ALTER TABLE prospects ADD COLUMN google_rating REAL;
+ALTER TABLE prospects ADD COLUMN google_review_count INTEGER;
+ALTER TABLE prospects ADD COLUMN google_maps_url TEXT;
+ALTER TABLE prospects ADD COLUMN verified_services_json TEXT;
+ALTER TABLE prospects ADD COLUMN enrichment_sources_json TEXT;
+ALTER TABLE prospects ADD COLUMN enrichment_provenance_json TEXT;
+ALTER TABLE prospects ADD COLUMN enriched_at TEXT;
