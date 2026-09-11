@@ -7,15 +7,16 @@ import AdminShell from '../../components/AdminShell.astro';
     <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Payments</h3><p>Stripe Checkout and recurring billing</p><p style="margin-bottom:0"><strong>Offer:</strong> $499 launch + $49/month</p></div>
     <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Transactional Email</h3><p>Resend using the verified CajunSites domain.</p><p style="margin-bottom:0"><strong>Sender:</strong> hello@cajunsites.com</p></div>
     <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Form Protection</h3><p>Cloudflare Turnstile protects lead and onboarding submissions.</p></div>
-    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Admin Authentication</h3><p>Password-protected dashboard with secure HttpOnly session cookie.</p></div>
+    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Admin Authentication</h3><p>Individual internal accounts with role-based access, PBKDF2 password hashing, revocable server-side sessions, and secure HttpOnly cookies.</p></div>
+    <div class="admin-card"><span class="pill green">Configured</span><h3 style="margin-top:12px">Internal Access</h3><p>Owner-managed access for CajunSites staff.</p><p style="margin-bottom:0"><a href="/admin/users/" style="font-weight:800;color:var(--purple-800)">Manage Internal Users →</a></p></div>
     <div class="admin-card"><span class="pill" id="opsPill">Checking</span><h3 style="margin-top:12px">Operations Storage</h3><p>Activity history, internal notes, and site metadata.</p><p id="opsText" style="margin-bottom:0">Checking database readiness...</p></div>
   </div>
   <div class="admin-grid" style="margin-top:14px;grid-template-columns:1fr 1fr">
     <div class="admin-card"><span class="pill gold">Pending Review</span><h3 style="margin-top:12px">Stripe Tax</h3><p>Automatic tax remains disabled pending final Louisiana tax treatment confirmation.</p></div>
-    <div class="admin-card"><h3>Security</h3><p>Runtime secrets are managed in Cloudflare and are not stored in GitHub. Customer onboarding links are signed, admin sessions use secure HttpOnly cookies, and all internal pages are excluded from search indexing.</p></div>
+    <div class="admin-card"><h3>Security</h3><p>Runtime secrets are managed in Cloudflare and are not stored in GitHub. Customer onboarding links are signed, internal sessions are stored server-side and can be revoked immediately, and all internal pages are excluded from search indexing.</p></div>
   </div>
 </AdminShell>
 <script is:inline>
 async function check(){try{const d=await window.adminApi('/api/admin/activity');const p=document.getElementById('opsPill'),t=document.getElementById('opsText');if(d.storageReady===false){p.textContent='Migration Required';p.className='pill gold';t.textContent='Apply migration 0003_admin_operations.sql to enable notes, activity history, and site metadata.'}else{p.textContent='Configured';p.className='pill green';t.textContent='Activity history, internal notes, and site metadata are available.'}}catch{}}
-window.addEventListener('admin-authenticated',check);check();
+window.addEventListener('admin-authenticated',check);if(window.adminUser)check();
 </script>
