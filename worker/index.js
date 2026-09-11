@@ -105,8 +105,8 @@ async function verifyStripeWebhookSignature(rawBody, signatureHeader, secret) {
 }
 
 async function sendCustomerWelcome(env, customer) {
-  if (!env.CUSTOMER_EMAIL) {
-    throw new Error('CUSTOMER_EMAIL binding is not configured');
+  if (!env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY is not configured');
   }
 
   const firstName = clean(customer.customer_name, 120).split(/\s+/)[0] || 'there';
@@ -130,12 +130,25 @@ async function sendCustomerWelcome(env, customer) {
     'hello@cajunsites.com',
   ].join('\n');
 
-  await env.CUSTOMER_EMAIL.send({
-    from: 'hello@cajunsites.com',
-    to: customer.email,
-    subject: 'Welcome to CajunSites - Next Step: Customer Onboarding',
-    text,
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'content-type': 'application/json',
+      'idempotency-key': `cajunsites-welcome-${customer.stripe_checkout_session_id}`,
+    },
+    body: JSON.stringify({
+      from: 'CajunSites <hello@cajunsites.com>',
+      to: [customer.email],
+      subject: 'Welcome to CajunSites - Next Step: Customer Onboarding',
+      text,
+    }),
   });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Resend welcome email failed (${response.status}): ${errorBody.slice(0, 1000)}`);
+  }
 }
 
 async function processSuccessfulCheckout(session, env) {
