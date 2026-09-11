@@ -2,7 +2,7 @@
 import AdminShell from '../../components/AdminShell.astro';
 ---
 <AdminShell title="Internal Users" eyebrow="Access Control" description="Manage CajunSites internal accounts, roles, sessions, and access." active="users">
-  <style>
+  <style is:global>
     .notice{display:none;padding:11px 13px;border-radius:10px;margin-bottom:14px}.notice.show{display:block;background:#e8f7ee;color:#17683a}.notice.error{background:#fdecec;color:#8d2424}.users-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:14px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.form-grid .full{grid-column:1/-1}.field{display:grid;gap:5px}.field label{font-size:.64rem;font-weight:900;color:#6d6174;text-transform:uppercase}.field input,.field select{width:100%;padding:10px 11px}.actions{display:flex;gap:6px;flex-wrap:wrap}.muted{color:#8b7f91;font-size:.73rem;line-height:1.45}.role-help{display:grid;gap:8px}.role-card{padding:10px 11px;border:1px solid #eee8f1;border-radius:10px}.role-card strong{display:block;color:#42165f;margin-bottom:3px}.user-name{font-weight:850;color:#382047}.user-email{font-size:.7rem;color:#8c8093;margin-top:2px}.roleSelect{min-width:112px;padding:7px 9px}.security-note{padding:14px;border-radius:11px;background:#f8f3fc;color:#5c4967;font-size:.74rem;line-height:1.5}@media(max-width:1050px){.users-grid{grid-template-columns:1fr}}@media(max-width:620px){.form-grid{grid-template-columns:1fr}.form-grid .full{grid-column:auto}.actions{min-width:210px}}
   </style>
   <div id="notice" class="notice"></div>
