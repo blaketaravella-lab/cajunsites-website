@@ -33,7 +33,7 @@ must(enrichment.includes('skipHttpRedirect=true'),'Google Place photos must be r
 must(enrichment.includes("type:'input_image'"),'Google Place photos must be passed to the vision model as image inputs.');
 must(enrichment.includes('Do not copy, reproduce, trace, crop, embed, or otherwise reuse any source photo'),'Visual analysis must explicitly prohibit copying Google source photos into concept sites.');
 must(enrichment.includes('refreshVisualInspiration'),'Concept builds must refresh derived visual inspiration before downstream build logic runs.');
-must(enrichment.includes('visual_inspiration:inspiration'),'Derived photo cues must feed the existing research design profile without storing source photos.');
+must(enrichment.includes('visual_inspiration:inspiration'),'Only derived visual cues, not source photo URLs, must be persisted into research data.');
 must(visualMigration.includes('visual_inspiration_json')&&visualMigration.includes('visual_inspiration_at'),'Visual inspiration persistence fields must have a canonical migration.');
 
 console.log('Prospect enrichment invariants passed.');
