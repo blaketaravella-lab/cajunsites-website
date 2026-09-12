@@ -21,7 +21,7 @@ jobs:
       - name: Validate Worker JavaScript
         run: |
           set -e
-          for file in worker/*.js; do
+          find worker -name '*.js' -print0 | while IFS= read -r -d '' file; do
             echo "Checking $file"
             node --check "$file"
           done
@@ -33,5 +33,7 @@ jobs:
         run: node worker/mobile-invariants.test.mjs
       - name: Test Prospect Enrichment Invariants
         run: node worker/prospect-enrichment.test.mjs
+      - name: Test AI Image Pipeline Invariants
+        run: node worker/image-pipeline.test.mjs
       - name: Build Astro site
         run: npm run build
