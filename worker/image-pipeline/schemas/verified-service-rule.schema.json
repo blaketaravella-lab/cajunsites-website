@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cajunsites.com/schemas/verified-service-rule.schema.json",
+  "title": "CajunSites Verified Service Visual Rule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["service_id", "display_name", "match", "generation", "qa", "inheritance"],
+  "properties": {
+    "service_id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+    "display_name": {"type": "string", "minLength": 2, "maxLength": 100},
+    "description": {"type": "string", "maxLength": 500},
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aliases"],
+      "properties": {
+        "aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 2, "maxLength": 100}},
+        "requires_any_service": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_]+$"}},
+        "requires_all_services": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_]+$"}},
+        "conflicts_with_services": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_]+$"}}
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed_subjects", "preferred_subjects", "forbidden_subjects", "prompt_additions", "negative_prompt_additions"],
+      "properties": {
+        "allowed_subjects": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "preferred_subjects": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "forbidden_subjects": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "prompt_additions": {"type": "array", "items": {"type": "string"}},
+        "negative_prompt_additions": {"type": "array", "items": {"type": "string"}},
+        "required_visual_elements": {"type": "array", "items": {"type": "string"}},
+        "avoid_visual_elements": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hard_reject_rules", "specialty_checks"],
+      "properties": {
+        "hard_reject_rules": {"type": "array", "items": {"$ref": "#/$defs/rejectRule"}},
+        "retry_rules": {"type": "array", "items": {"$ref": "#/$defs/rejectRule"}},
+        "specialty_checks": {"type": "array", "items": {"type": "string"}},
+        "technical_checks": {"type": "array", "items": {"type": "string"}},
+        "minimum_threshold_overrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "overall_auto_approve": {"type": "integer", "minimum": 0, "maximum": 100},
+            "business_relevance_min": {"type": "integer", "minimum": 0, "maximum": 35},
+            "service_relevance_min": {"type": "integer", "minimum": 0, "maximum": 15},
+            "composition_min": {"type": "integer", "minimum": 0, "maximum": 15},
+            "realism_min": {"type": "integer", "minimum": 0, "maximum": 15},
+            "brand_fit_min": {"type": "integer", "minimum": 0, "maximum": 10},
+            "safety_min": {"type": "integer", "minimum": 0, "maximum": 5}
+          }
+        }
+      }
+    },
+    "representation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_contexts": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "forbidden_contexts": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "allow_actual_work_claim": {"type": "boolean", "const": false}
+      }
+    },
+    "inheritance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "may_relax_parent_hard_rejects"],
+      "properties": {
+        "mode": {"type": "string", "enum": ["restrictive_overlay"]},
+        "may_relax_parent_hard_rejects": {"type": "boolean", "const": false},
+        "may_lower_parent_thresholds": {"type": "boolean", "const": false}
+      }
+    }
+  },
+  "$defs": {
+    "rejectRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "description", "severity"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "description": {"type": "string", "minLength": 3},
+        "severity": {"type": "string", "enum": ["hard", "retry"]}
+      }
+    }
+  }
+}
