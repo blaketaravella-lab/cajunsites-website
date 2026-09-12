@@ -6,6 +6,7 @@ const designChat=fs.readFileSync('worker/design-chat.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const migration=fs.readFileSync('migrations/0010_prospect_enrichment.sql','utf8');
 const visualMigration=fs.readFileSync('migrations/0011_visual_inspiration.sql','utf8');
+const designMigration=fs.readFileSync('migrations/0012_design_studio.sql','utf8');
 
 const must=(condition,message)=>{if(!condition)throw new Error(message)};
 
@@ -39,4 +40,17 @@ must(enrichment.includes('await refreshVisualInspiration(env,id)'),'Concept buil
 must(enrichment.includes('visual_inspiration:inspiration'),'Only derived visual cues, not source photo URLs, must be persisted into research data.');
 must(visualMigration.includes('visual_inspiration_json')&&visualMigration.includes('visual_inspiration_at'),'Visual inspiration persistence fields must have a canonical migration.');
 
-console.log('Prospect enrichment invariants passed.');
+must(designChat.includes('a tightly constrained website-design assistant'),'Design Studio must use an explicit website-design-only system boundary.');
+must(designChat.includes('You have no tools, no code execution, no filesystem, no database access'),'Design Studio prompt must deny tool, code, filesystem, and database capabilities.');
+must(designChat.includes('Never output HTML, CSS, JavaScript'),'Design Studio must prohibit code generation.');
+must(!designChat.includes("tools:[")&&!designChat.includes('tools: ['),'Design Studio model calls must not expose OpenAI tools.');
+must(designChat.includes("const PROFILE_KEYS=['archetype','mood','image_theme','headline','cta','sections','process']"),'Design Studio must use an explicit design-field allowlist.');
+must(designChat.includes('normalizeProposal'),'Every AI design proposal must be normalized through the allowlist.');
+must(designChat.includes("role='assistant'")&&designChat.includes('proposal_json'),'Only stored assistant proposals may be applied.');
+must(designChat.includes("p.research_status!=='Complete'"),'Design Studio must require completed research before applying a design.');
+must(designChat.includes('design_directives_json')&&designChat.includes('design_profile_origin'),'Applied design changes must be isolated as design directives and labeled separately from research.');
+must(designChat.includes('`/api/admin/prospects/${id}/build-concept`'),'Applying a design may only hand off to the existing concept builder.');
+must(!designChat.includes('/api/admin/users')&&!designChat.includes('/api/admin/settings')&&!designChat.includes('/api/admin/billing'),'Design Studio must not contain mutation paths for protected dashboard domains.');
+must(designMigration.includes('design_chat_messages')&&designMigration.includes('design_directives_json'),'Design Studio must have canonical isolated persistence.');
+
+console.log('Prospect enrichment and Design Studio invariants passed.');
