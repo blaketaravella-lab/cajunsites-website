@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const enrichment=fs.readFileSync('worker/prospect-enrichment.js','utf8');
 const billing=fs.readFileSync('worker/billing.js','utf8');
+const designChat=fs.readFileSync('worker/design-chat.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const migration=fs.readFileSync('migrations/0010_prospect_enrichment.sql','utf8');
 const visualMigration=fs.readFileSync('migrations/0011_visual_inspiration.sql','utf8');
@@ -10,7 +11,8 @@ const must=(condition,message)=>{if(!condition)throw new Error(message)};
 
 const enrichmentIsTopLevel=wrangler.includes('"main": "./worker/prospect-enrichment.js"');
 const billingWrapsEnrichment=wrangler.includes('"main": "./worker/billing.js"')&&billing.includes("import appWorker from './prospect-enrichment.js'");
-must(enrichmentIsTopLevel||billingWrapsEnrichment,'Prospect enrichment must remain in the top-level Worker chain.');
+const designChatWrapsBilling=wrangler.includes('"main": "./worker/design-chat.js"')&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
+must(enrichmentIsTopLevel||billingWrapsEnrichment||designChatWrapsBilling,'Prospect enrichment must remain in the top-level Worker chain.');
 must(enrichment.includes("origin:'manual'"),'Manual edits must be recorded in field provenance.');
 must(enrichment.includes("'manual_existing'"),'Legacy non-empty values must be protected from research overwrite.');
 must(enrichment.includes("origin:'research'"),'Research-populated fields must retain research provenance.');
