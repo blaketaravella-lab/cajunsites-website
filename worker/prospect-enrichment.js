@@ -17,7 +17,8 @@ async function ensureSchema(env){
     'ALTER TABLE prospects ADD COLUMN verified_services_json TEXT',
     'ALTER TABLE prospects ADD COLUMN enrichment_sources_json TEXT',
     'ALTER TABLE prospects ADD COLUMN enrichment_provenance_json TEXT',
-    'ALTER TABLE prospects ADD COLUMN enriched_at TEXT'
+    'ALTER TABLE prospects ADD COLUMN enriched_at TEXT',
+    "ALTER TABLE prospects ADD COLUMN research_status TEXT NOT NULL DEFAULT 'Not Run'"
   ];
   for(const sql of alters){try{await env.DB.prepare(sql).run()}catch(e){if(!/duplicate column|already exists/i.test(String(e?.message||e)))throw e}}
 }
@@ -87,10 +88,31 @@ async function enrichFromStoredResearch(env,id,before=null){
 
 async function readJsonClone(request){try{return await request.clone().json()}catch{return null}}
 
-export default {
-  async fetch(request,env){
+async function queueAutoResearch(worker,request,env,context,id){
+  await ensureSchema(env);
+  await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+  const url=new URL(request.url);url.pathname=`/api/admin/prospects/${id}/research`;url.search='';
+  const headers=new Headers({'content-type':'application/json'});
+  const cookie=request.headers.get('cookie');if(cookie)headers.set('cookie',cookie);
+  headers.set('origin',url.origin);
+  const task=worker.fetch(new Request(url.toString(),{method:'POST',headers,body:'{}'}),env,context).then(async response=>{
+    if(response.ok)return;
+    const payload=await response.clone().json().catch(()=>({}));
+    const message=clean(payload?.error||`Automatic research request failed (${response.status})`,1000);
+    await env.DB.prepare("UPDATE prospects SET research_status='Failed',research_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(message,id).run().catch(()=>{});
+    console.error('Automatic prospect research failed',{prospectId:id,error:message});
+  }).catch(async error=>{
+    const message=clean(error?.message||error,1000);
+    await env.DB.prepare("UPDATE prospects SET research_status='Failed',research_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(message,id).run().catch(()=>{});
+    console.error('Automatic prospect research failed',{prospectId:id,error:message});
+  });
+  if(context?.waitUntil)context.waitUntil(task);else await task;
+}
+
+const worker={
+  async fetch(request,env,context){
     const url=new URL(request.url);
-    if(!env.DB)return prospectCleanupWorker.fetch(request,env);
+    if(!env.DB)return prospectCleanupWorker.fetch(request,env,context);
     await ensureSchema(env);
 
     let data=null,before=null,id=null;
@@ -103,14 +125,16 @@ export default {
     if(isManualUpdate)id=Number(prospectMatch[1]);
     if(isResearchMutation){id=Number(researchMatch[1]);const row=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(row)before=protectedSnapshot(row)}
 
-    const response=await prospectCleanupWorker.fetch(request,env);
+    const response=await prospectCleanupWorker.fetch(request,env,context);
     if(!response.ok)return response;
 
     try{
-      if(isCreate){const payload=await response.clone().json();if(payload?.id)await markManualFields(env,Number(payload.id),data)}
+      if(isCreate){const payload=await response.clone().json();if(payload?.id){id=Number(payload.id);await markManualFields(env,id,data);await queueAutoResearch(worker,request,env,context,id)}}
       if(isManualUpdate)await markManualFields(env,id,data);
       if(isResearchMutation)await enrichFromStoredResearch(env,id,before);
     }catch(error){console.error('Prospect enrichment post-processing failed',error)}
     return response;
   }
 };
+
+export default worker;
