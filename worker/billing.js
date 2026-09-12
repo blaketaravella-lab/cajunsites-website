@@ -5,6 +5,7 @@ const clean=(value,max=2000)=>String(value??'').trim().slice(0,max);
 const CUSTOMER_BILLING_RE=/^\/api\/admin\/customers\/(\d+)\/billing$/;
 const CUSTOMER_INVOICES_RE=/^\/api\/admin\/customers\/(\d+)\/invoices$/;
 const SEND_INVOICE_RE=/^\/api\/admin\/invoices\/(in_[A-Za-z0-9_]+)\/send$/;
+const BILLING_CATALOG_RE=/^\/api\/admin\/billing\/catalog$/;
 
 async function getActor(request,env){
   const url=new URL(request.url);
@@ -94,6 +95,34 @@ function normalizeSubscription(subscription){
   };
 }
 
+function normalizeCatalogPrice(price,product){
+  return {
+    id:price.id,
+    product_id:typeof price.product==='string'?price.product:price.product?.id||null,
+    product_name:product?.name||'Stripe product',
+    product_description:product?.description||null,
+    nickname:price.nickname||null,
+    lookup_key:price.lookup_key||null,
+    currency:(price.currency||'usd').toUpperCase(),
+    unit_amount:Number(price.unit_amount||0),
+    type:price.type||'one_time',
+    recurring:price.recurring?{interval:price.recurring.interval,interval_count:Number(price.recurring.interval_count||1)}:null,
+  };
+}
+
+async function billingCatalog(env){
+  const [products,prices]=await Promise.all([
+    stripeRequest(env,'/products',{params:{active:'true',limit:100}}),
+    stripeRequest(env,'/prices',{params:{active:'true',limit:100}}),
+  ]);
+  const productMap=new Map((products.data||[]).map(product=>[product.id,product]));
+  return (prices.data||[])
+    .filter(price=>Number.isFinite(Number(price.unit_amount)))
+    .map(price=>normalizeCatalogPrice(price,productMap.get(typeof price.product==='string'?price.product:price.product?.id)))
+    .filter(price=>productMap.has(price.product_id))
+    .sort((a,b)=>a.product_name.localeCompare(b.product_name)||a.unit_amount-b.unit_amount);
+}
+
 async function billingSnapshot(env,customer){
   if(!customer.stripe_customer_id){
     return {customer:{id:customer.id,business_name:customer.business_name,customer_name:customer.customer_name,email:customer.email,stripe_customer_id:null},stripe_customer:null,subscription:null,invoices:[],stripe_configured:Boolean(env.STRIPE_SECRET_KEY)};
@@ -123,22 +152,42 @@ async function handleBillingGet(env,customerId){
   }
 }
 
+async function handleCatalogGet(env){
+  try{return json({ok:true,prices:await billingCatalog(env)})}
+  catch(error){
+    console.error('Stripe billing catalog failed',{error:error instanceof Error?error.message:String(error)});
+    return json({ok:false,error:error instanceof Error?error.message:'Unable to load Stripe products and prices.'},error?.status===401?503:502);
+  }
+}
+
 async function createInvoice(request,env,actor,customerId){
   if(!canMutate(actor))return json({ok:false,error:'Your role is read only.'},403);
   const customer=await getCustomer(env,customerId);
   if(!customer)return json({ok:false,error:'Customer not found.'},404);
   if(!customer.stripe_customer_id)return json({ok:false,error:'This customer is not linked to a Stripe customer yet.'},409);
   let data;try{data=await request.json()}catch{return json({ok:false,error:'Invalid request.'},400)}
+  const priceId=clean(data.price_id,100);
   const description=clean(data.description,500);
   const amountDollars=Number(data.amount);
+  const quantity=Math.max(1,Math.min(1000,Number.parseInt(data.quantity,10)||1));
   const dueDays=Math.max(1,Math.min(90,Number.parseInt(data.due_days,10)||14));
   const memo=clean(data.memo,1000);
-  if(!description)return json({ok:false,error:'Invoice description is required.'},400);
-  if(!Number.isFinite(amountDollars)||amountDollars<=0)return json({ok:false,error:'Enter a valid invoice amount greater than $0.'},400);
-  const amount=Math.round(amountDollars*100);
+  if(!priceId){
+    if(!description)return json({ok:false,error:'Custom line item description is required.'},400);
+    if(!Number.isFinite(amountDollars)||amountDollars<=0)return json({ok:false,error:'Enter a valid custom unit amount greater than $0.'},400);
+  }
   try{
+    let lineItemParams;
+    if(priceId){
+      const price=await stripeRequest(env,`/prices/${encodeURIComponent(priceId)}`);
+      if(!price.active)return json({ok:false,error:'The selected Stripe price is no longer active.'},409);
+      lineItemParams={customer:customer.stripe_customer_id,price:price.id,quantity};
+    }else{
+      const unitAmount=Math.round(amountDollars*100);
+      lineItemParams={customer:customer.stripe_customer_id,currency:'usd',unit_amount_decimal:String(unitAmount),quantity,description};
+    }
     const invoice=await stripeRequest(env,'/invoices',{method:'POST',params:{customer:customer.stripe_customer_id,collection_method:'send_invoice',days_until_due:dueDays,description:memo||undefined,'metadata[cajunsites_customer_id]':customer.id,'metadata[cajunsites_business_name]':customer.business_name||''}});
-    await stripeRequest(env,'/invoiceitems',{method:'POST',params:{customer:customer.stripe_customer_id,invoice:invoice.id,amount,currency:'usd',description}});
+    await stripeRequest(env,'/invoiceitems',{method:'POST',params:{...lineItemParams,invoice:invoice.id}});
     const refreshed=await stripeRequest(env,`/invoices/${encodeURIComponent(invoice.id)}`);
     return json({ok:true,invoice:normalizeInvoice(refreshed)},201);
   }catch(error){
@@ -170,12 +219,17 @@ export default{
     const billingMatch=url.pathname.match(CUSTOMER_BILLING_RE);
     const invoiceMatch=url.pathname.match(CUSTOMER_INVOICES_RE);
     const sendMatch=url.pathname.match(SEND_INVOICE_RE);
-    if(!billingMatch&&!invoiceMatch&&!sendMatch)return appWorker.fetch(request,env);
+    const catalogMatch=url.pathname.match(BILLING_CATALOG_RE);
+    if(!billingMatch&&!invoiceMatch&&!sendMatch&&!catalogMatch)return appWorker.fetch(request,env);
 
     const actor=await getActor(request,env);
     if(!actor)return json({ok:false,error:'Authentication required.'},401);
     if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503);
 
+    if(catalogMatch){
+      if(request.method!=='GET')return json({ok:false,error:'Method not allowed.'},405);
+      return handleCatalogGet(env);
+    }
     if(billingMatch){
       if(request.method!=='GET')return json({ok:false,error:'Method not allowed.'},405);
       return handleBillingGet(env,Number(billingMatch[1]));
