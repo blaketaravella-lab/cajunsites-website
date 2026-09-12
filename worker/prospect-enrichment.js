@@ -5,6 +5,7 @@ const BUSINESS_FIELDS=['business_name','category','business_vertical','city','st
 const RESEARCH_MUTATION_RE=/^\/api\/admin\/prospects\/(\d+)\/(research|build-concept)$/;
 const PROSPECT_MUTATION_RE=/^\/api\/admin\/prospects\/(\d+)$/;
 const VISION_MODEL='gpt-5.6-luna';
+const DESIGN_PROFILE_KEYS=['archetype','mood','image_theme','headline','cta','sections','process'];
 
 async function ensureSchema(env){
   if(!env.DB)return;
@@ -21,7 +22,9 @@ async function ensureSchema(env){
     'ALTER TABLE prospects ADD COLUMN enriched_at TEXT',
     "ALTER TABLE prospects ADD COLUMN research_status TEXT NOT NULL DEFAULT 'Not Run'",
     'ALTER TABLE prospects ADD COLUMN visual_inspiration_json TEXT',
-    'ALTER TABLE prospects ADD COLUMN visual_inspiration_at TEXT'
+    'ALTER TABLE prospects ADD COLUMN visual_inspiration_at TEXT',
+    'ALTER TABLE prospects ADD COLUMN design_directives_json TEXT',
+    'ALTER TABLE prospects ADD COLUMN design_directives_updated_at TEXT'
   ];
   for(const sql of alters){try{await env.DB.prepare(sql).run()}catch(e){if(!/duplicate column|already exists/i.test(String(e?.message||e)))throw e}}
 }
@@ -124,7 +127,8 @@ async function refreshVisualInspiration(env,id){
   const research=parseJson(p.research_json,{}),profile={...(research.design_profile||{})};
   if(inspiration.visual_mood)profile.mood=inspiration.visual_mood;
   const visualSignal=[profile.image_theme,inspiration.hero_direction,...inspiration.subjects,...inspiration.materials].filter(Boolean).join(' | ');if(visualSignal)profile.image_theme=clean(visualSignal,500);
-  const updatedResearch={...research,design_profile:profile,visual_inspiration:inspiration};
+  const directives=parseJson(p.design_directives_json,null);if(directives&&typeof directives==='object'){for(const key of DESIGN_PROFILE_KEYS){if(directives[key]!==undefined)profile[key]=directives[key]}}
+  const updatedResearch={...research,design_profile:profile,visual_inspiration:inspiration,design_profile_origin:directives?'design_studio':research.design_profile_origin};
   await env.DB.prepare('UPDATE prospects SET research_json=?,visual_inspiration_json=?,visual_inspiration_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(JSON.stringify(updatedResearch),JSON.stringify(inspiration),id).run();
   return inspiration;
 }
