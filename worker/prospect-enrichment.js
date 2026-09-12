@@ -88,24 +88,43 @@ async function enrichFromStoredResearch(env,id,before=null){
 
 async function readJsonClone(request){try{return await request.clone().json()}catch{return null}}
 
-async function queueAutoResearch(worker,request,env,context,id){
-  await ensureSchema(env);
-  await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
-  const url=new URL(request.url);url.pathname=`/api/admin/prospects/${id}/research`;url.search='';
+function internalPostRequest(request,path){
+  const url=new URL(request.url);url.pathname=path;url.search='';
   const headers=new Headers({'content-type':'application/json'});
   const cookie=request.headers.get('cookie');if(cookie)headers.set('cookie',cookie);
   headers.set('origin',url.origin);
-  const task=worker.fetch(new Request(url.toString(),{method:'POST',headers,body:'{}'}),env,context).then(async response=>{
-    if(response.ok)return;
-    const payload=await response.clone().json().catch(()=>({}));
-    const message=clean(payload?.error||`Automatic research request failed (${response.status})`,1000);
-    await env.DB.prepare("UPDATE prospects SET research_status='Failed',research_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(message,id).run().catch(()=>{});
-    console.error('Automatic prospect research failed',{prospectId:id,error:message});
-  }).catch(async error=>{
-    const message=clean(error?.message||error,1000);
-    await env.DB.prepare("UPDATE prospects SET research_status='Failed',research_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(message,id).run().catch(()=>{});
-    console.error('Automatic prospect research failed',{prospectId:id,error:message});
-  });
+  return new Request(url.toString(),{method:'POST',headers,body:'{}'});
+}
+
+async function recordAutomationFailure(env,id,field,message){
+  await env.DB.prepare(`UPDATE prospects SET ${field}=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(clean(message,1000),id).run().catch(()=>{});
+}
+
+async function queueAutoResearchAndBuild(worker,request,env,context,id){
+  await ensureSchema(env);
+  await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+  const task=(async()=>{
+    try{
+      const researchResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/research`),env,context);
+      if(!researchResponse.ok){
+        const payload=await researchResponse.clone().json().catch(()=>({}));
+        const message=clean(payload?.error||`Automatic research request failed (${researchResponse.status})`,1000);
+        await recordAutomationFailure(env,id,'research_error',message);
+        console.error('Automatic prospect research failed',{prospectId:id,error:message});
+        return;
+      }
+      const buildResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/build-concept`),env,context);
+      if(!buildResponse.ok){
+        const payload=await buildResponse.clone().json().catch(()=>({}));
+        const message=clean(payload?.error||`Automatic concept build failed (${buildResponse.status})`,1000);
+        console.error('Automatic concept build failed',{prospectId:id,error:message});
+      }
+    }catch(error){
+      const message=clean(error?.message||error,1000);
+      await recordAutomationFailure(env,id,'research_error',message);
+      console.error('Automatic prospect workflow failed',{prospectId:id,error:message});
+    }
+  })();
   if(context?.waitUntil)context.waitUntil(task);else await task;
 }
 
@@ -129,7 +148,7 @@ const worker={
     if(!response.ok)return response;
 
     try{
-      if(isCreate){const payload=await response.clone().json();if(payload?.id){id=Number(payload.id);await markManualFields(env,id,data);await queueAutoResearch(worker,request,env,context,id)}}
+      if(isCreate){const payload=await response.clone().json();if(payload?.id){id=Number(payload.id);await markManualFields(env,id,data);await queueAutoResearchAndBuild(worker,request,env,context,id)}}
       if(isManualUpdate)await markManualFields(env,id,data);
       if(isResearchMutation)await enrichFromStoredResearch(env,id,before);
     }catch(error){console.error('Prospect enrichment post-processing failed',error)}
