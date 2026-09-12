@@ -57,10 +57,14 @@ async function recordActivity(env, user, description, metadata = null) {
   } catch {}
 }
 
-async function listProspects(env) {
+async function listProspects(env, url) {
   await ensureSchema(env);
-  const result = await env.DB.prepare('SELECT * FROM prospects ORDER BY id DESC').all();
-  return json({ ok: true, prospects: result.results || [], stages: PROSPECT_STAGES });
+  const includeConverted = url.searchParams.get('include_converted') === '1';
+  const sql = includeConverted
+    ? 'SELECT * FROM prospects ORDER BY id DESC'
+    : 'SELECT * FROM prospects WHERE customer_id IS NULL ORDER BY id DESC';
+  const result = await env.DB.prepare(sql).all();
+  return json({ ok: true, prospects: result.results || [], stages: PROSPECT_STAGES, include_converted: includeConverted });
 }
 
 async function createProspect(request, env, user) {
@@ -81,6 +85,7 @@ async function updateProspect(request, env, user, id) {
   if (user.role === 'read_only') return json({ok:false,error:'Your role is read only.'},403);
   const existing = await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();
   if (!existing) return json({ok:false,error:'Prospect not found.'},404);
+  if (existing.customer_id) return json({ok:false,error:'Converted prospects are preserved as history and cannot be edited from the active prospect workflow.'},409);
   let data; try { data = await request.json(); } catch { return json({ok:false,error:'Invalid request.'},400); }
   const stage = data.stage !== undefined && PROSPECT_STAGES.includes(data.stage) ? data.stage : existing.stage;
   const values = {
@@ -111,8 +116,9 @@ async function updateProspect(request, env, user, id) {
 
 async function deleteProspect(env, user, id) {
   if (!['owner','admin'].includes(user.role)) return json({ok:false,error:'Admin access is required to remove prospects.'},403);
-  const existing = await env.DB.prepare('SELECT business_name FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  const existing = await env.DB.prepare('SELECT business_name,customer_id FROM prospects WHERE id=? LIMIT 1').bind(id).first();
   if (!existing) return json({ok:false,error:'Prospect not found.'},404);
+  if (existing.customer_id) return json({ok:false,error:'Converted prospects are retained as customer history and cannot be removed.'},409);
   await env.DB.prepare('DELETE FROM prospects WHERE id=?').bind(id).run();
   await recordActivity(env,user,`${user.name} removed prospect ${existing.business_name}`,{prospect_id:id});
   return json({ok:true});
@@ -125,7 +131,7 @@ async function handleProspects(request, env, url) {
   if (!sameOriginMutation(request)) return json({ok:false,error:'Invalid request origin.'},403);
   await ensureSchema(env);
   if (url.pathname === '/api/admin/prospects') {
-    if (request.method === 'GET') return listProspects(env);
+    if (request.method === 'GET') return listProspects(env,url);
     if (request.method === 'POST') return createProspect(request,env,user);
     return json({ok:false,error:'Method not allowed.'},405);
   }
