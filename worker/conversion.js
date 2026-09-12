@@ -5,8 +5,6 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
 });
 
-const PAYMENT_LINK_URL = 'https://buy.stripe.com/8x2aEY3gl3Ev1pQ0St3wQ00';
-const PAYMENT_LINK_ID = 'plink_1UETwWINepSxCPJz8VjC4MSO';
 const clean = (value, max = 2000) => String(value ?? '').trim().slice(0, max);
 
 function sameOriginMutation(request) {
@@ -61,44 +59,115 @@ async function recordActivity(env, customerId, eventType, description, metadata 
   } catch (error) { console.warn('Conversion activity logging unavailable', error instanceof Error ? error.message : String(error)); }
 }
 
-async function createConversionCheckout(request, env, prospectId) {
+async function insertConvertedCustomer(env, prospect) {
+  const businessName = clean(prospect.business_name, 160);
+  const customerName = clean(prospect.contact_name, 120);
+  const email = clean(prospect.email, 254).toLowerCase();
+  const baseSql = `INSERT INTO customers (
+    stripe_customer_id,stripe_checkout_session_id,stripe_subscription_id,payment_link_id,
+    customer_name,business_name,email,status,onboarding_completed,welcome_email_sent,
+    source_prospect_id,billing_status,subscription_status,created_at,updated_at
+  ) VALUES (NULL,?,NULL,NULL,?,?,?,'Ready to Build',0,0,?,'Not Configured',NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`;
+
+  try {
+    const result = await env.DB.prepare(baseSql)
+      .bind(null, customerName || null, businessName, email, prospect.id).run();
+    return Number(result.meta?.last_row_id || 0);
+  } catch (error) {
+    // Older production databases required stripe_checkout_session_id. A clearly
+    // internal compatibility key keeps direct conversion working without
+    // creating or invoking any Stripe Checkout Session.
+    if (!/NOT NULL constraint failed:\s*customers\.stripe_checkout_session_id/i.test(String(error?.message || error))) throw error;
+    const compatibilityKey = `direct_conversion_${prospect.id}_${crypto.randomUUID()}`;
+    const result = await env.DB.prepare(baseSql)
+      .bind(compatibilityKey, customerName || null, businessName, email, prospect.id).run();
+    return Number(result.meta?.last_row_id || 0);
+  }
+}
+
+async function promoteConceptSite(env, customerId, prospect) {
+  const conceptUrl = clean(prospect.concept_url, 1000);
+  if (!conceptUrl) throw new Error('Prospect must have a concept site before conversion.');
+  const templateKey = clean(prospect.concept_visual_family || prospect.visual_family || '', 120) || null;
+  const note = `Promoted from prospect #${prospect.id} concept site during customer conversion.`;
+  await env.DB.prepare(`INSERT INTO customer_sites (customer_id,preview_url,template_key,internal_notes,updated_at)
+    VALUES (?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(customer_id) DO UPDATE SET
+      preview_url=excluded.preview_url,
+      template_key=COALESCE(customer_sites.template_key,excluded.template_key),
+      internal_notes=CASE
+        WHEN COALESCE(customer_sites.internal_notes,'')='' THEN excluded.internal_notes
+        ELSE customer_sites.internal_notes || '\n' || excluded.internal_notes
+      END,
+      updated_at=CURRENT_TIMESTAMP`)
+    .bind(customerId, conceptUrl, templateKey, note).run();
+}
+
+async function convertProspectToCustomer(request, env, prospectId) {
   if (!env.DB) return json({ ok:false,error:'Customer database is not configured.' },503);
   if (!sameOriginMutation(request)) return json({ ok:false,error:'Invalid request origin.' },403);
   const user = await currentUser(request, env);
   if (!user) return json({ ok:false,error:'Authentication required.' },401);
   if (user.role === 'read_only') return json({ ok:false,error:'Your role is read only.' },403);
+
   await ensureConversionSchema(env);
   const prospect = await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(prospectId).first();
   if (!prospect) return json({ ok:false,error:'Prospect not found.' },404);
-  if (prospect.customer_id) return json({ ok:true,already_converted:true,customer_id:prospect.customer_id });
-  const params = new URLSearchParams({ client_reference_id: `prospect_${prospect.id}` });
-  const email = clean(prospect.email, 254).toLowerCase();
-  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) params.set('prefilled_email', email);
-  const checkoutUrl = `${PAYMENT_LINK_URL}?${params.toString()}`;
-  await env.DB.prepare('UPDATE prospects SET checkout_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(prospect.id).run();
-  await recordActivity(env, null, 'prospect_conversion_started', `${user.name} started Stripe checkout for prospect ${prospect.business_name}`, { prospect_id:prospect.id,business_name:prospect.business_name,actor:{id:user.id,name:user.name,email:user.email,role:user.role} });
-  return json({ ok:true,checkout_url:checkoutUrl,prospect_id:prospect.id });
-}
 
-function parseProspectReference(value) { const match = String(value || '').match(/^prospect_(\d+)$/); return match ? Number(match[1]) : null; }
+  if (prospect.customer_id) {
+    return json({
+      ok:true,
+      already_converted:true,
+      customer_id:Number(prospect.customer_id),
+      customer_url:`/admin/?customer=${Number(prospect.customer_id)}`,
+    });
+  }
 
-async function finalizeProspectConversion(event, env) {
-  if (!env.DB || !['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event?.type)) return;
-  const session = event?.data?.object || {}, prospectId = parseProspectReference(session.client_reference_id);
-  if (!prospectId || session.payment_link !== PAYMENT_LINK_ID || session.payment_status !== 'paid') return;
-  await ensureConversionSchema(env);
-  const customer = await env.DB.prepare('SELECT * FROM customers WHERE stripe_checkout_session_id=? LIMIT 1').bind(session.id).first();
-  if (!customer) throw new Error(`Paid prospect checkout ${session.id} has no customer row yet.`);
-  const prospect = await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(prospectId).first();
-  if (!prospect) throw new Error(`Paid checkout references missing prospect ${prospectId}.`);
-  if (prospect.customer_id && Number(prospect.customer_id) !== Number(customer.id)) throw new Error(`Prospect ${prospectId} is linked to a different customer.`);
+  if (!clean(prospect.concept_url, 1000)) {
+    return json({ ok:false,error:'Build a concept site before converting this prospect to a customer.' },409);
+  }
 
-  await env.DB.prepare(`UPDATE customers SET source_prospect_id=?,business_name=CASE WHEN COALESCE(TRIM(business_name),'')='' THEN ? ELSE business_name END,customer_name=CASE WHEN COALESCE(TRIM(customer_name),'')='' THEN ? ELSE customer_name END,billing_status=COALESCE(billing_status,'Current'),subscription_status=COALESCE(subscription_status,'active'),updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-    .bind(prospect.id, prospect.business_name || null, prospect.contact_name || null, customer.id).run();
-  await env.DB.prepare(`UPDATE prospects SET customer_id=?,stage='Won',outcome=CASE WHEN COALESCE(TRIM(outcome),'')='' THEN 'Converted to customer' ELSE outcome END,converted_at=COALESCE(converted_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-    .bind(customer.id, prospect.id).run();
-  if (clean(prospect.concept_url,1000)) await env.DB.prepare(`INSERT INTO customer_sites (customer_id,preview_url,updated_at) VALUES (?,?,CURRENT_TIMESTAMP) ON CONFLICT(customer_id) DO UPDATE SET preview_url=CASE WHEN COALESCE(customer_sites.preview_url,'')='' THEN excluded.preview_url ELSE customer_sites.preview_url END,updated_at=CURRENT_TIMESTAMP`).bind(customer.id,prospect.concept_url).run();
-  await recordActivity(env, customer.id, 'prospect_converted', `${prospect.business_name} converted from prospect to paid customer`, { prospect_id:prospect.id,customer_id:customer.id,checkout_session_id:session.id,concept_url:prospect.concept_url||null,actor:{name:'Stripe webhook',role:'system'} });
+  const existingCustomer = await env.DB.prepare('SELECT id FROM customers WHERE source_prospect_id=? LIMIT 1').bind(prospect.id).first();
+  let customerId = Number(existingCustomer?.id || 0);
+  if (!customerId) customerId = await insertConvertedCustomer(env, prospect);
+  if (!customerId) throw new Error('Customer record could not be created.');
+
+  await promoteConceptSite(env, customerId, prospect);
+  await env.DB.prepare(`UPDATE prospects SET
+    customer_id=?,
+    stage='Won',
+    outcome='Converted to customer',
+    converted_at=COALESCE(converted_at,CURRENT_TIMESTAMP),
+    checkout_started_at=NULL,
+    updated_at=CURRENT_TIMESTAMP
+    WHERE id=?`)
+    .bind(customerId, prospect.id).run();
+
+  if (clean(prospect.notes, 4000)) {
+    try {
+      await env.DB.prepare(`INSERT INTO customer_notes (customer_id,note,created_at) VALUES (?,?,CURRENT_TIMESTAMP)`)
+        .bind(customerId, `Sales notes carried forward from prospect:\n${clean(prospect.notes, 4000)}`).run();
+    } catch (error) {
+      console.warn('Could not carry prospect notes into customer record', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  await recordActivity(env, customerId, 'prospect_converted', `${prospect.business_name} converted from prospect to customer`, {
+    prospect_id:prospect.id,
+    customer_id:customerId,
+    concept_url:prospect.concept_url,
+    billing_started:false,
+    actor:{id:user.id,name:user.name,email:user.email,role:user.role},
+  });
+
+  return json({
+    ok:true,
+    customer_id:customerId,
+    prospect_id:prospect.id,
+    concept_url:prospect.concept_url,
+    customer_url:`/admin/?customer=${customerId}`,
+    billing_started:false,
+  });
 }
 
 async function findCustomerForStripeObject(env, obj) {
@@ -157,11 +226,11 @@ async function synchronizeStripeLifecycle(event, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const checkoutMatch = url.pathname.match(/^\/api\/admin\/prospects\/(\d+)\/convert-checkout$/);
-    if (checkoutMatch) {
+    const conversionMatch = url.pathname.match(/^\/api\/admin\/prospects\/(\d+)\/(?:convert|convert-checkout)$/);
+    if (conversionMatch) {
       if (request.method !== 'POST') return json({ ok:false,error:'Method not allowed.' },405);
-      try { return await createConversionCheckout(request, env, Number(checkoutMatch[1])); }
-      catch (error) { console.error('Prospect conversion checkout failed', error); return json({ ok:false,error:'Could not start customer checkout.' },500); }
+      try { return await convertProspectToCustomer(request, env, Number(conversionMatch[1])); }
+      catch (error) { console.error('Prospect conversion failed', error); return json({ ok:false,error:'Could not convert prospect to customer.' },500); }
     }
 
     if (url.pathname === '/api/stripe-webhook' && request.method === 'POST') {
@@ -171,7 +240,6 @@ export default {
       if (!response.ok) return response;
       try {
         const event = JSON.parse(await rawBodyPromise);
-        await finalizeProspectConversion(event, env);
         await synchronizeStripeLifecycle(event, env);
       } catch (error) {
         console.error('Post-verification Stripe synchronization failed', error);
