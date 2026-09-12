@@ -1,0 +1,62 @@
+---
+import AdminShell from '../../components/AdminShell.astro';
+---
+<AdminShell title="Billing" eyebrow="Stripe Billing" description="Create and send invoices, review subscription state, and see live customer billing history." active="billing">
+  <button slot="actions" id="refresh" class="admin-action" type="button">↻ Sync Stripe</button>
+  <style is:global>
+    .billing-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:10px;padding:12px;background:#fff;border:1px solid #e9e2ed;border-radius:14px;margin-bottom:14px}.billing-toolbar select{min-height:44px;padding:0 12px}.billing-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,.8fr);gap:14px;align-items:start}.billing-stack{display:grid;gap:14px}.notice{display:none;padding:11px 13px;border-radius:10px;margin-bottom:14px}.notice.show{display:block;background:#e8f7ee;color:#17683a}.notice.error{background:#fdecec;color:#8d2424}.billing-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.summary-box{border:1px solid #eee8f1;border-radius:12px;padding:14px}.summary-box small{display:block;color:#8b7f91;text-transform:uppercase;letter-spacing:.05em;font-size:.61rem;font-weight:900;margin-bottom:7px}.summary-box strong{display:block;color:#280548;font-size:1.02rem;overflow-wrap:anywhere}.summary-box span{display:block;color:#807486;font-size:.7rem;margin-top:4px}.invoice-form{display:grid;gap:11px}.invoice-form label{display:grid;gap:5px;font-size:.72rem;font-weight:850;color:#4a285f}.invoice-form input,.invoice-form textarea{width:100%;padding:10px 11px}.invoice-form textarea{min-height:88px;resize:vertical}.form-row{display:grid;grid-template-columns:1fr 130px;gap:10px}.form-actions{display:flex;justify-content:flex-end;gap:8px}.money{font-variant-numeric:tabular-nums;font-weight:850;color:#2d0b50}.invoice-links{display:flex;gap:8px;flex-wrap:wrap}.invoice-links a{color:#641bc0;font-weight:800;text-decoration:none}.muted{color:#8b7f91;font-size:.72rem}.history-wrap{overflow:auto}.sync-time{font-size:.68rem;color:#8b7f91}.stripe-missing{padding:18px;border:1px dashed #d9cce1;border-radius:12px;background:#fdfbff;color:#755f82}.send-btn{white-space:nowrap}@media(max-width:1050px){.billing-grid{grid-template-columns:1fr}.billing-summary{grid-template-columns:1fr 1fr 1fr}}@media(max-width:700px){.billing-toolbar{grid-template-columns:1fr}.billing-summary{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.form-actions{justify-content:stretch}.form-actions .admin-action{width:100%}}
+  </style>
+
+  <div id="notice" class="notice"></div>
+  <div class="billing-toolbar">
+    <select id="customer"><option value="">Select a customer...</option></select>
+    <span id="syncTime" class="sync-time"></span>
+  </div>
+
+  <div class="billing-grid">
+    <div class="billing-stack">
+      <section class="surface">
+        <div class="surface-head"><div><h3>Billing Snapshot</h3><p>Live from Stripe whenever this page is refreshed.</p></div></div>
+        <div class="surface-body" id="summary"><div class="empty">Select a customer to load billing details.</div></div>
+      </section>
+
+      <section class="surface">
+        <div class="surface-head"><div><h3>Invoice History</h3><p>Draft, open, paid, void, and uncollectible invoices for the selected customer.</p></div></div>
+        <div class="history-wrap"><table class="admin-table"><thead><tr><th>Invoice</th><th>Status</th><th>Total</th><th>Due</th><th>Created</th><th>Links</th><th></th></tr></thead><tbody id="history"><tr><td colspan="7" class="empty">Select a customer to view billing history.</td></tr></tbody></table></div>
+      </section>
+    </div>
+
+    <section class="surface">
+      <div class="surface-head"><div><h3>Create Invoice</h3><p>Create a Stripe draft invoice, then send it when ready.</p></div></div>
+      <div class="surface-body">
+        <form id="invoiceForm" class="invoice-form">
+          <label>Description<input id="description" maxlength="500" placeholder="Website change, add-on, domain work..." required/></label>
+          <div class="form-row">
+            <label>Amount<input id="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required/></label>
+            <label>Due in days<input id="dueDays" type="number" min="1" max="90" value="14" required/></label>
+          </div>
+          <label>Invoice memo<textarea id="memo" maxlength="1000" placeholder="Optional note shown on the invoice"></textarea></label>
+          <div class="form-actions"><button class="admin-action purple" id="createBtn" type="submit">Create Draft Invoice</button></div>
+        </form>
+      </div>
+    </section>
+  </div>
+</AdminShell>
+
+<script is:inline>
+const el=id=>document.getElementById(id);let customers=[],selectedId=null,snapshot=null;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=(cents,currency='USD')=>new Intl.NumberFormat('en-US',{style:'currency',currency:currency||'USD'}).format((Number(cents)||0)/100);
+const date=s=>s?new Date(Number(s)*1000).toLocaleDateString():'—';
+const dateTime=s=>s?new Date(Number(s)*1000).toLocaleString():'—';
+function notice(message,isError=false){const n=el('notice');n.textContent=message;n.className='notice show'+(isError?' error':'');setTimeout(()=>n.className='notice',5000)}
+function statusPill(status){const cls=status==='paid'||status==='active'?'green':status==='draft'?'gray':status==='open'||status==='past_due'?'gold':status==='void'||status==='uncollectible'||status==='unpaid'?'red':'gray';return `<span class="pill ${cls}">${esc(status||'unknown')}</span>`}
+function selectedCustomer(){return customers.find(c=>Number(c.id)===Number(selectedId))||null}
+async function loadCustomers(){const d=await window.adminApi('/api/admin/customers');customers=d.customers||[];customers.sort((a,b)=>String(a.business_name||a.email).localeCompare(String(b.business_name||b.email)));el('customer').innerHTML='<option value="">Select a customer...</option>'+customers.map(c=>`<option value="${c.id}">${esc(c.business_name||c.customer_name||c.email)} — ${esc(c.email)}</option>`).join('');const requested=new URLSearchParams(location.search).get('customer');if(requested&&customers.some(c=>String(c.id)===requested)){el('customer').value=requested;selectedId=Number(requested);await loadBilling()}else if(customers.length===1){el('customer').value=customers[0].id;selectedId=Number(customers[0].id);await loadBilling()}}
+async function loadBilling(){if(!selectedId){snapshot=null;el('summary').innerHTML='<div class="empty">Select a customer to load billing details.</div>';el('history').innerHTML='<tr><td colspan="7" class="empty">Select a customer to view billing history.</td></tr>';return}el('summary').innerHTML='<div class="empty">Syncing with Stripe...</div>';el('history').innerHTML='<tr><td colspan="7" class="empty">Loading invoices...</td></tr>';try{snapshot=await window.adminApi(`/api/admin/customers/${selectedId}/billing`);renderSummary();renderHistory();el('syncTime').textContent=`Synced ${new Date().toLocaleTimeString()}`;history.replaceState(null,'',`?customer=${selectedId}`)}catch(err){snapshot=null;el('summary').innerHTML=`<div class="stripe-missing">${esc(err.message)}</div>`;el('history').innerHTML='<tr><td colspan="7" class="empty">Billing history unavailable.</td></tr>';notice(err.message,true)}}
+function renderSummary(){const c=snapshot.customer||{},sc=snapshot.stripe_customer,s=snapshot.subscription;const open=(snapshot.invoices||[]).filter(i=>i.status==='open').reduce((n,i)=>n+Number(i.amount_remaining||0),0);el('summary').innerHTML=`<div class="billing-summary"><div class="summary-box"><small>Stripe Customer</small><strong>${esc(c.business_name||c.customer_name||c.email)}</strong><span>${esc(sc?.email||c.email||'')}</span></div><div class="summary-box"><small>Subscription</small><strong>${s?statusPill(s.status):'No subscription'}</strong><span>${s&&s.amount?`${money(s.amount,s.currency)} / ${esc(s.interval||'period')}`:'No recurring Stripe subscription found'}</span></div><div class="summary-box"><small>Open Balance</small><strong>${money(open,'USD')}</strong><span>${(snapshot.invoices||[]).filter(i=>i.status==='open').length} open invoice(s)</span></div></div>`}
+function renderHistory(){const invoices=snapshot?.invoices||[];if(!invoices.length){el('history').innerHTML='<tr><td colspan="7" class="empty">No Stripe invoices for this customer yet.</td></tr>';return}el('history').innerHTML=invoices.map(i=>{const links=[];if(i.hosted_invoice_url)links.push(`<a href="${esc(i.hosted_invoice_url)}" target="_blank" rel="noopener">Hosted invoice ↗</a>`);if(i.invoice_pdf)links.push(`<a href="${esc(i.invoice_pdf)}" target="_blank" rel="noopener">PDF ↗</a>`);const canSend=['draft','open'].includes(i.status);return `<tr><td><strong>${esc(i.number||i.id)}</strong><div class="muted">${esc(i.description||'')}</div></td><td>${statusPill(i.status)}</td><td><span class="money">${money(i.total,i.currency)}</span>${i.amount_remaining?`<div class="muted">${money(i.amount_remaining,i.currency)} remaining</div>`:''}</td><td>${esc(date(i.due_date))}</td><td>${esc(dateTime(i.created))}</td><td><div class="invoice-links">${links.join('')||'<span class="muted">Not available</span>'}</div></td><td>${canSend?`<button class="admin-action compact send-btn" data-send="${esc(i.id)}">Send</button>`:''}</td></tr>`}).join('');document.querySelectorAll('[data-send]').forEach(b=>b.onclick=()=>sendInvoice(b.dataset.send,b))}
+async function sendInvoice(id,button){if(!confirm('Send this Stripe invoice to the customer now?'))return;button.disabled=true;button.textContent='Sending...';try{await window.adminApi(`/api/admin/invoices/${id}/send`,{method:'POST',body:'{}'});notice('Invoice sent through Stripe.');await loadBilling()}catch(err){notice(err.message,true)}finally{button.disabled=false;button.textContent='Send'}}
+el('invoiceForm').addEventListener('submit',async e=>{e.preventDefault();if(!selectedId){notice('Select a customer first.',true);return}const button=el('createBtn');button.disabled=true;button.textContent='Creating...';try{await window.adminApi(`/api/admin/customers/${selectedId}/invoices`,{method:'POST',body:JSON.stringify({description:el('description').value.trim(),amount:Number(el('amount').value),due_days:Number(el('dueDays').value),memo:el('memo').value.trim()})});notice('Draft invoice created in Stripe.');el('description').value='';el('amount').value='';el('memo').value='';await loadBilling()}catch(err){notice(err.message,true)}finally{button.disabled=false;button.textContent='Create Draft Invoice'}});
+el('customer').addEventListener('change',async()=>{selectedId=el('customer').value?Number(el('customer').value):null;await loadBilling()});el('refresh').onclick=()=>loadBilling();window.addEventListener('admin-authenticated',()=>loadCustomers().catch(e=>notice(e.message,true)));loadCustomers().catch(()=>{});
+</script>
