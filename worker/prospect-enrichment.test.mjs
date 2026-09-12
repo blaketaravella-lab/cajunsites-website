@@ -4,6 +4,7 @@ const enrichment=fs.readFileSync('worker/prospect-enrichment.js','utf8');
 const billing=fs.readFileSync('worker/billing.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const migration=fs.readFileSync('migrations/0010_prospect_enrichment.sql','utf8');
+const visualMigration=fs.readFileSync('migrations/0011_visual_inspiration.sql','utf8');
 
 const must=(condition,message)=>{if(!condition)throw new Error(message)};
 
@@ -27,5 +28,12 @@ must(enrichment.includes('`/api/admin/prospects/${id}/build-concept`'),'A succes
 must(enrichment.indexOf('`/api/admin/prospects/${id}/research`')<enrichment.indexOf('`/api/admin/prospects/${id}/build-concept`'),'Automatic concept build must run only after the automatic research call.');
 must(enrichment.includes('context?.waitUntil'),'Automatic prospect workflow must run asynchronously when the Worker execution context is available.');
 must(enrichment.includes("(research|build-concept)"),'Manual Research and Build Concept mutation routing must remain available.');
+must(enrichment.includes('places.googleapis.com/v1/places:searchText'),'Concept builds must look up the exact business in Google Places before visual analysis.');
+must(enrichment.includes('skipHttpRedirect=true'),'Google Place photos must be retrieved transiently for analysis rather than embedded into the generated site.');
+must(enrichment.includes("type:'input_image'"),'Google Place photos must be passed to the vision model as image inputs.');
+must(enrichment.includes('Do not copy, reproduce, trace, crop, embed, or otherwise reuse any source photo'),'Visual analysis must explicitly prohibit copying Google source photos into concept sites.');
+must(enrichment.includes('refreshVisualInspiration'),'Concept builds must refresh derived visual inspiration before downstream build logic runs.');
+must(enrichment.includes('visual_inspiration:inspiration'),'Derived photo cues must feed the existing research design profile without storing source photos.');
+must(visualMigration.includes('visual_inspiration_json')&&visualMigration.includes('visual_inspiration_at'),'Visual inspiration persistence fields must have a canonical migration.');
 
 console.log('Prospect enrichment invariants passed.');
