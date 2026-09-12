@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cajunsites.com/schemas/visual-qa-policy.schema.json",
+  "title": "CajunSites Visual QA Specialty Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy_id", "version", "industry", "specialty", "display_name", "status", "thresholds", "representation", "generation", "hard_reject_rules", "qa_instructions", "service_rules"],
+  "properties": {
+    "policy_id": {"type": "string", "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"},
+    "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "industry": {"type": "string", "minLength": 2},
+    "specialty": {"type": "string", "minLength": 2},
+    "display_name": {"type": "string", "minLength": 2},
+    "status": {"type": "string", "enum": ["active", "draft", "deprecated"]},
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overall_auto_approve", "business_relevance_min", "service_relevance_min", "composition_min", "realism_min", "brand_fit_min", "safety_min", "distinctiveness_min"],
+      "properties": {
+        "overall_auto_approve": {"type": "integer", "minimum": 0, "maximum": 100},
+        "business_relevance_min": {"type": "integer", "minimum": 0, "maximum": 35},
+        "service_relevance_min": {"type": "integer", "minimum": 0, "maximum": 15},
+        "composition_min": {"type": "integer", "minimum": 0, "maximum": 15},
+        "realism_min": {"type": "integer", "minimum": 0, "maximum": 15},
+        "brand_fit_min": {"type": "integer", "minimum": 0, "maximum": 10},
+        "safety_min": {"type": "integer", "minimum": 0, "maximum": 5},
+        "distinctiveness_min": {"type": "integer", "minimum": 0, "maximum": 5}
+      }
+    },
+    "representation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed_classes", "forbidden_classes", "allow_as_actual_work", "require_representative_disclosure"],
+      "properties": {
+        "allowed_classes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["representative_industry", "representative_service", "actual_customer_supplied", "actual_customer_verified"]}},
+        "forbidden_classes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["representative_industry", "representative_service", "actual_customer_supplied", "actual_customer_verified"]}},
+        "allow_as_actual_work": {"type": "boolean"},
+        "require_representative_disclosure": {"type": "boolean"}
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preferred_subjects", "allowed_contexts", "negative_prompt_terms", "service_grounding_required"],
+      "properties": {
+        "preferred_subjects": {"type": "array", "items": {"type": "string"}},
+        "allowed_contexts": {"type": "array", "items": {"type": "string"}},
+        "negative_prompt_terms": {"type": "array", "items": {"type": "string"}},
+        "service_grounding_required": {"type": "boolean"}
+      }
+    },
+    "hard_reject_rules": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/rejectRule"}},
+    "qa_instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["specialty_checks", "technical_checks"],
+      "properties": {
+        "specialty_checks": {"type": "array", "items": {"type": "string"}},
+        "technical_checks": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "service_rules": {
+      "type": "object",
+      "additionalProperties": {"$ref": "verified-service-rule.schema.json"}
+    }
+  },
+  "$defs": {
+    "rejectRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "description", "severity"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "description": {"type": "string", "minLength": 3},
+        "severity": {"type": "string", "enum": ["hard", "retry"]}
+      }
+    }
+  }
+}
