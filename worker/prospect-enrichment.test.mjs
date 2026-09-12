@@ -20,5 +20,10 @@ must(enrichment.includes('google_rating')&&enrichment.includes('google_review_co
 must(enrichment.includes('verified_services_json'),'Verified services must be persisted on the prospect record.');
 must(migration.includes('enrichment_provenance_json'),'Canonical migration must include enrichment provenance.');
 must(!enrichment.includes('call_attempts')&&!enrichment.includes('next_follow_up')&&!enrichment.includes('decision_maker_reached'),'Research enrichment must not mutate human sales workflow fields.');
+must(enrichment.includes('queueAutoResearch'),'New prospect creation must queue automatic research.');
+must(enrichment.includes("research_status='Queued'"),'Automatic research must expose a queued state.');
+must(enrichment.includes('`/api/admin/prospects/${id}/research`'),'Automatic research must use the existing research endpoint so manual re-runs remain consistent.');
+must(enrichment.includes('context?.waitUntil'),'Automatic research must run asynchronously when the Worker execution context is available.');
+must(enrichment.includes("(research|build-concept)"),'Manual Research and concept mutation routing must remain available.');
 
 console.log('Prospect enrichment invariants passed.');
