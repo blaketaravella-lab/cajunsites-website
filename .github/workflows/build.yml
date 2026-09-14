@@ -39,6 +39,8 @@ jobs:
         run: node worker/admin-visual-invariants.test.mjs
       - name: Test Prospect Enrichment Invariants
         run: node worker/prospect-enrichment.test.mjs
+      - name: Test Concept Verification Invariants
+        run: node worker/concept-verification-notes.test.mjs
       - name: Test AI Image Pipeline Invariants
         run: node worker/image-pipeline.test.mjs
       - name: Build Astro site
