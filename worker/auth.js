@@ -1,4 +1,5 @@
 import appWorker from './app.js';
+import { resolveTenantContext, TenantAccessError } from './tenant-context.js';
 
 const ADMIN_COOKIE = 'cajunsites_admin';
 const ADMIN_SESSION_SECONDS = 60 * 60 * 12;
@@ -135,7 +136,7 @@ async function currentUser(request, env) {
   const token = readCookie(request, ADMIN_COOKIE);
   if (!token || !env.DB) return null;
   const tokenHash = await sha256Hex(token);
-  return env.DB.prepare(`SELECT u.id,u.email,u.name,u.role,u.is_active FROM admin_sessions s JOIN internal_users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.is_active=1 LIMIT 1`)
+  return env.DB.prepare(`SELECT u.id,u.email,u.name,u.role,u.is_active,u.current_tenant_id FROM admin_sessions s JOIN internal_users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.is_active=1 LIMIT 1`)
     .bind(tokenHash, new Date().toISOString()).first();
 }
 
@@ -193,12 +194,14 @@ async function handleLogin(request, env) {
       return json({ ok: false, error: 'Incorrect email or password.' }, 401);
     }
 
+    await env.DB.prepare(`INSERT OR IGNORE INTO tenant_memberships (tenant_id,user_id,role,status,created_at,updated_at) VALUES (COALESCE(?,1),?,?,\'active\',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).bind(user.current_tenant_id || 1,user.id,user.role === 'read_only' ? 'viewer' : user.role).run();
+    const tenant = await resolveTenantContext(env, user);
     await recordLoginAttempt(env,key,true);
     await env.DB.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?').bind(new Date().toISOString()).run();
     const token = await createSession(user.id, env);
     await env.DB.prepare('UPDATE internal_users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?').bind(user.id).run();
     return json(
-      { ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } },
+      { ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role, current_tenant_id: tenant.id }, tenant }, 
       200,
       { 'set-cookie': `${ADMIN_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${ADMIN_SESSION_SECONDS}` },
     );
@@ -218,7 +221,9 @@ async function handleCreateUser(request,env){
   if(!email||!email.includes('@')||!name||!['owner','admin','operator','read_only'].includes(role)||password.length<12)return json({ok:false,error:'Name, valid email, role, and a temporary password of at least 12 characters are required.'},400);
   await ensureAuthSchema(env);const existing=await env.DB.prepare('SELECT id FROM internal_users WHERE email=? LIMIT 1').bind(email).first();if(existing)return json({ok:false,error:'An internal user with that email already exists.'},409);
   const salt=randomHex(16),hash=await hmacPasswordHash(password,salt,env);const result=await env.DB.prepare(`INSERT INTO internal_users (email,name,role,password_salt,password_hash,password_scheme,is_active,created_at,updated_at) VALUES (?,?,?,?,?,'hmac_v2',1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).bind(email,name,role,salt,hash).run();
-  return json({ok:true,id:result.meta?.last_row_id||null});
+  const userId=result.meta?.last_row_id||null;
+  if(userId)await env.DB.prepare(`INSERT OR IGNORE INTO tenant_memberships (tenant_id,user_id,role,status,created_at,updated_at) VALUES (COALESCE(?,1),?,?,\'active\',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).bind(actor.current_tenant_id||1,userId,role==='read_only'?'viewer':role).run();
+  return json({ok:true,id:userId});
 }
 
 async function handleResetPassword(request,env,userId){
@@ -234,6 +239,11 @@ export default {
     if (url.pathname === '/api/admin/login') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405);
       return handleLogin(request, env);
+    }
+    if(url.pathname==='/api/admin/me'&&request.method==='GET'){
+      const user=await currentUser(request,env);if(!user)return json({ok:false,error:'Authentication required.'},401);
+      try{const tenant=await resolveTenantContext(env,user);return json({ok:true,user:{id:user.id,email:user.email,name:user.name,role:user.role,current_tenant_id:tenant.id},tenant})}
+      catch(error){if(error instanceof TenantAccessError)return json({ok:false,error:error.message},error.status);throw error}
     }
     if(url.pathname==='/api/admin/users'&&request.method==='POST')return handleCreateUser(request,env);
     const reset=url.pathname.match(/^\/api\/admin\/users\/(\d+)\/password$/);if(reset&&request.method==='POST')return handleResetPassword(request,env,Number(reset[1]));
