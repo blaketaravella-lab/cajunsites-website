@@ -13,4 +13,9 @@ if(!source.includes("routing:'native_static_preview_then_alias'")) throw new Err
 if(!(source.indexOf('await verifySourceFiles(env,deploymentId,fileRefs)')<source.indexOf('await assignAlias(env,deploymentId,alias)'))) throw new Error('Exact source verification must happen before alias activation.');
 if(!(source.indexOf('await assignAlias(env,deploymentId,alias)')<source.indexOf('await verifyLiveAlias(alias,buildId)'))) throw new Error('Customer-facing verification must happen immediately after alias activation.');
 if(!source.includes("concept_state=CASE WHEN COALESCE(concept_url,'')<>'' THEN 'Built' ELSE 'Build Failed' END")) throw new Error('Failed rebuilds must preserve Built state when an existing concept remains available.');
+if(!source.includes('SSL_ALIAS_ATTEMPTS=30')) throw new Error('Alias activation must tolerate certificate provisioning delays instead of failing after a short retry window.');
+if(!source.includes('LIVE_VERIFY_ATTEMPTS=30')) throw new Error('HTTPS verification must tolerate DNS and certificate propagation delays.');
+if(!source.includes("errorStage='Provisioning SSL'")) throw new Error('SSL provisioning failures must surface as a distinct build stage.');
+if(!source.includes("errorStage='Verifying HTTPS'")) throw new Error('HTTPS verification failures must surface as a distinct build stage.');
+if(!source.includes('after SSL/DNS propagation retries')) throw new Error('Final verification errors must distinguish propagation exhaustion from content mismatch.');
 console.log('Concept verification invariants passed.');
