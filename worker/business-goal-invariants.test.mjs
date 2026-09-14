@@ -35,16 +35,19 @@ assert.match(designStudio, /build_id/,'Design Studio must surface build IDs.');
 
 assert.match(wrangler, /"main": "\.\/worker\/concept-design-worker\.js"/,'Concept Design Worker must remain the production Worker entry point.');
 assert.match(conceptWorker, /import appWorker from '\.\/stale-build-recovery\.js'/,'Stale build recovery must remain in the top-level Worker chain.');
-assert.match(conceptWorker, /import staticBuildWorker from '\.\/concept-factory-v2\.js'/,'All concept builds must use the canonical static v2 deployer.');
+assert.match(conceptWorker, /import staticBuildWorker from '\.\/concept-factory-v2\.js'/,'All concept builds must use the canonical atomic preview deployer.');
 assert.match(staleRecovery, /STALE_MINUTES=15/,'Interrupted concept builds must self-heal instead of staying Building forever.');
 
-assert.match(conceptFactory, /verifyDeployment/,'Concept deployments must be verified.');
-assert.ok(conceptFactory.indexOf('await verifyDeployment') < conceptFactory.indexOf('await assignAlias'),'A deployment must verify before its alias is activated.');
+assert.match(conceptFactory, /verifySourceFiles/,'Concept preview deployments must verify exact stored source files before activation.');
+assert.ok(conceptFactory.indexOf('await verifySourceFiles') < conceptFactory.indexOf('await assignAlias'),'A preview deployment must verify before its alias is activated.');
+assert.match(conceptFactory, /verifyLiveAlias/,'The activated concept alias must be verified before the build is committed.');
+assert.ok(conceptFactory.indexOf('await assignAlias') < conceptFactory.indexOf('await verifyLiveAlias'),'Live alias verification must happen after activation.');
 assert.match(conceptFactory, /previous_deployment_id/,'Build history must retain the previous deployment for rollback.');
 assert.match(conceptFactory, /assignAlias\(env,oldDeploymentId,alias\)/,'Failed alias activation must support rollback to the previous deployment.');
 assert.match(conceptFactory, /if\(p\.customer_id\)/,'Converted prospects must not continue through prospect concept builds.');
 assert.doesNotMatch(conceptFactory, /vercelUploadFile\(env,'vercel\.json'/,'Canonical concept builds must not install catch-all routing that can shadow static assets.');
-assert.match(conceptFactory, /native_static_no_rewrites/,'Canonical concept builds must use native static Vercel routing.');
+assert.match(conceptFactory, /native_static_preview_then_alias/,'Canonical concept builds must use native static preview deployment followed by explicit alias activation.');
+assert.doesNotMatch(conceptFactory, /target:'production'/,'Concept builds must not publish a candidate as production before verification.');
 
 assert.match(imagePipeline, /representative only/i,'Generated concept imagery must be explicitly representative.');
 assert.match(imagePipeline, /MAX_ATTEMPTS=3/,'Image generation must remain bounded.');
