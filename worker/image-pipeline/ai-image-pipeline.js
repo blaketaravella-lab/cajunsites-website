@@ -34,7 +34,7 @@ export function buildImageBrief(prospect,role,policy,feedback=''){
     :'wide commercial photograph clearly distinct from the hero, supporting detail or atmosphere, landscape orientation. Prefer a different camera distance, subject emphasis, or environment from the hero while staying within the verified business context';
   const conflict=policy?.identity?.conflict?`Stored research contains visual cues from a conflicting business family (${policy.identity.research_family}). The trusted business identity (${policy.identity.trusted_family}) controls this image. Ignore conflicting research imagery completely.`:'';
   const prompt=[`Create a photorealistic representative website image for ${prospect.business_name}.`,`Verified business specialty: ${policy?.display_name||r.vertical||prospect.category||'local business'}.`,services.length?`Verified services: ${services.join(', ')}.`:'',baseSubjects.length?`Appropriate subjects: ${baseSubjects.join('; ')}.`:'',conflict,`Image role: ${role}. ${roleDirection}.`,`The image is representative only. Do not depict or imply the actual business premises, actual employees, actual customers, actual completed projects, awards, credentials, branded fleet, or verified results unless supplied as source imagery.`,`No logos, trademarks, watermarks, readable signage, prices, claims, badges, seals, account data, legal text, medical records, license plates, or identifiable real people.`,`Avoid: ${(policy?.forbidden_image_subjects||[]).join('; ')||'unrelated industries, generated text, visual artifacts'}.`,`Professional local-small-business advertising photography, natural lighting, realistic anatomy and tools, believable environment.`,feedback?`Previous QA feedback to correct: ${clean(feedback,900)}.`:''].filter(Boolean).join(' ');
-  return{role,prompt,policy_id:policy?.policy_id||'generic',policy_version:policy?.version||'1.0.0',expected_subjects:baseSubjects,verified_services:services,forbidden_subjects:policy?.forbidden_image_subjects||[],identity:policy?.identity||null};
+  return{role,prompt,policy_id:policy?.policy_id||'generic',policy_version:policy?.version||'1.0.0',policy_mode:policy?.policy_mode||'legacy',expected_subjects:baseSubjects,verified_services:services,forbidden_subjects:policy?.forbidden_image_subjects||[],identity:policy?.identity||null};
 }
 
 async function ensureSchema(env){
@@ -71,7 +71,7 @@ async function qa(env,prospect,brief,generated,policy,companion=null){
 async function record(env,prospect,buildId,brief,generated,attempt,qaResult){
   if(!env.DB)return null;await ensureSchema(env);
   const assetPath=qaResult?.approved?ASSET_PATHS[brief.role]||null:null;
-  const result=await env.DB.prepare(`INSERT INTO concept_images (prospect_id,build_id,image_role,provider,model,prompt,policy_id,policy_version,policy_hash,asset_path,generation_status,qa_status,qa_score,qa_json,attempt_number,representation_class,approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='approved' THEN CURRENT_TIMESTAMP ELSE NULL END)`).bind(prospect.id,buildId,brief.role,generated?.provider||'openai',generated?.model||'unknown',brief.prompt,brief.policy_id,brief.policy_version,shaLike(JSON.stringify({id:brief.policy_id,version:brief.policy_version,expected:brief.expected_subjects,forbidden:brief.forbidden_subjects,identity:brief.identity})),assetPath,generated?'generated':'failed',qaResult?.approved?'approved':'rejected',Number.isFinite(Number(qaResult?.overall_score))?Number(qaResult.overall_score):null,JSON.stringify(qaResult||{}),attempt,'representative_service',qaResult?.approved?'approved':'rejected').run();
+  const result=await env.DB.prepare(`INSERT INTO concept_images (prospect_id,build_id,image_role,provider,model,prompt,policy_id,policy_version,policy_hash,asset_path,generation_status,qa_status,qa_score,qa_json,attempt_number,representation_class,approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='approved' THEN CURRENT_TIMESTAMP ELSE NULL END)`).bind(prospect.id,buildId,brief.role,generated?.provider||'openai',generated?.model||'unknown',brief.prompt,brief.policy_id,brief.policy_version,shaLike(JSON.stringify({id:brief.policy_id,version:brief.policy_version,mode:brief.policy_mode,expected:brief.expected_subjects,forbidden:brief.forbidden_subjects,identity:brief.identity})),assetPath,generated?'generated':'failed',qaResult?.approved?'approved':'rejected',Number.isFinite(Number(qaResult?.overall_score))?Number(qaResult.overall_score):null,JSON.stringify(qaResult||{}),attempt,'representative_service',qaResult?.approved?'approved':'rejected').run();
   return result.meta?.last_row_id||null;
 }
 
@@ -101,7 +101,7 @@ async function generateRole(env,prospect,buildId,role,policy,companion=null){
     const brief=buildImageBrief(prospect,role,policy,feedback);let generated;
     try{
       generated=await generateImageAsset(env,{prompt:brief.prompt,size:'1536x1024',quality:'medium',format:'webp'});
-      await trackUsage(env,prospect.id,generated,'image_generation',{role,attempt});
+      await trackUsage(env,prospect.id,generated,'image_generation',{role,attempt,policy_mode:policy?.policy_mode||null});
       const q=await qa(env,prospect,brief,generated,policy,companion);
       lastQa=q;
       const imageId=await record(env,prospect,buildId,brief,generated,attempt,q);
@@ -132,12 +132,14 @@ async function heroReuseFallback(env,prospect,buildId,policy,hero,error){
 
 export async function generateApprovedConceptImages(env,prospect,buildId){
   if(!buildId)throw new Error('AI image build requires a build ID.');
-  const policy=resolveImagePolicy(prospect);await ensureSchema(env);
+  const policy=resolveImagePolicy(prospect);
+  if(policy?.policy_mode==='insufficient-research'||policy?.status==='blocked')throw new Error(`Visual policy could not be safely resolved. ${policy?.reason||'Verified research is insufficient.'} Review or rerun business research before building the concept.`);
+  await ensureSchema(env);
   const hero=await generateRole(env,prospect,buildId,'hero',policy);
   let secondary;
   try{secondary=await generateRole(env,prospect,buildId,'secondary',policy,hero)}
   catch(error){secondary=await heroReuseFallback(env,prospect,buildId,policy,hero,error)}
-  return{provider:hero.generated.provider,model:hero.generated.model,policy_id:policy.policy_id,policy_version:policy.version,identity:policy.identity,hero,secondary,warnings:secondary.fallback?[{code:'secondary_image_fallback',reason:secondary.fallback_reason}]:[]};
+  return{provider:hero.generated.provider,model:hero.generated.model,policy_id:policy.policy_id,policy_version:policy.version,policy_mode:policy.policy_mode||'legacy',identity:policy.identity,hero,secondary,warnings:secondary.fallback?[{code:'secondary_image_fallback',reason:secondary.fallback_reason}]:[]};
 }
 
 function ensureLocalAssetReferences(html,selection){
