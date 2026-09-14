@@ -53,5 +53,9 @@ jobs:
         run: node worker/business-goal-invariants.test.mjs
       - name: Test Customer Lifecycle Invariants
         run: node worker/customer-lifecycle.test.mjs
+      - name: Validate Standalone Concept Pipeline Service
+        run: npm --prefix concept-pipeline-service run check
+      - name: Test Standalone Concept Pipeline Service
+        run: npm --prefix concept-pipeline-service test
       - name: Build Astro site
         run: npm run build
