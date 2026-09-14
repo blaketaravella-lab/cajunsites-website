@@ -60,9 +60,7 @@ async function recordActivity(env, user, description, metadata = null) {
 async function listProspects(env, url) {
   await ensureSchema(env);
   const includeConverted = url.searchParams.get('include_converted') === '1';
-  const sql = includeConverted
-    ? 'SELECT * FROM prospects ORDER BY id DESC'
-    : 'SELECT * FROM prospects WHERE customer_id IS NULL ORDER BY id DESC';
+  const sql = includeConverted ? 'SELECT * FROM prospects ORDER BY id DESC' : 'SELECT * FROM prospects WHERE customer_id IS NULL ORDER BY id DESC';
   const result = await env.DB.prepare(sql).all();
   return json({ ok: true, prospects: result.results || [], stages: PROSPECT_STAGES, include_converted: includeConverted });
 }
@@ -70,14 +68,15 @@ async function listProspects(env, url) {
 async function createProspect(request, env, user) {
   if (user.role === 'read_only') return json({ ok:false, error:'Your role is read only.' }, 403);
   let data; try { data = await request.json(); } catch { return json({ ok:false,error:'Invalid request.' },400); }
-  const business = clean(data.business_name, 200);
+  const business = clean(data.business_name, 200), city = clean(data.city,120), state = clean(data.state,40);
   const stage = PROSPECT_STAGES.includes(data.stage) ? data.stage : 'Qualified';
   if (!business) return json({ ok:false,error:'Business name is required.' },400);
+  if (!city || !state) return json({ ok:false,error:'City and state are required so research can identify the correct business.' },400);
   const result = await env.DB.prepare(`INSERT INTO prospects
     (business_name,category,city,state,concept_url,stage,qualification,website_gate,contact_name,phone,email,call_attempts,decision_maker_reached,concept_viewed,next_follow_up,outcome,notes,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-    .bind(business,clean(data.category,160)||null,clean(data.city,120)||null,clean(data.state,40)||null,clean(data.concept_url,1000)||null,stage,clean(data.qualification,40)||null,clean(data.website_gate,200)||null,clean(data.contact_name,160)||null,clean(data.phone,80)||null,clean(data.email,255)||null,Number(data.call_attempts||0),data.decision_maker_reached?1:0,data.concept_viewed?1:0,clean(data.next_follow_up,80)||null,clean(data.outcome,160)||null,clean(data.notes,4000)||null).run();
-  await recordActivity(env,user,`${user.name} added prospect ${business}`,{prospect_id:result.meta?.last_row_id||null});
+    .bind(business,clean(data.category,160)||null,city,state,clean(data.concept_url,1000)||null,stage,clean(data.qualification,40)||null,clean(data.website_gate,200)||null,clean(data.contact_name,160)||null,clean(data.phone,80)||null,clean(data.email,255)||null,Number(data.call_attempts||0),data.decision_maker_reached?1:0,data.concept_viewed?1:0,clean(data.next_follow_up,80)||null,clean(data.outcome,160)||null,clean(data.notes,4000)||null).run();
+  await recordActivity(env,user,`${user.name} added prospect ${business}`,{prospect_id:result.meta?.last_row_id||null,identity_anchor:{business_name:business,city,state}});
   return json({ok:true,id:result.meta?.last_row_id||null});
 }
 
