@@ -45,5 +45,7 @@ jobs:
         run: node worker/concept-verification-notes.test.mjs
       - name: Test AI Image Pipeline Invariants
         run: node worker/image-pipeline.test.mjs
+      - name: Test Business Goal Alignment Invariants
+        run: node worker/business-goal-invariants.test.mjs
       - name: Build Astro site
         run: npm run build
