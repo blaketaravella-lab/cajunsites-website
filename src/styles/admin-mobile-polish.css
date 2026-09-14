@@ -1,0 +1,236 @@
+/* CajunSites Admin mobile polish
+   Tightens spacing, prevents accidental horizontal overflow, and makes mobile layouts intentional. */
+
+@media(max-width:900px){
+  body.cs-admin{overflow-x:hidden}
+  body.cs-admin .shell,
+  body.cs-admin .main,
+  body.cs-admin .content,
+  body.cs-admin .surface,
+  body.cs-admin .admin-card,
+  body.cs-admin .card,
+  body.cs-admin .overview-panel{min-width:0;max-width:100%}
+
+  body.cs-admin .mobilebar{
+    min-height:calc(56px + env(safe-area-inset-top));
+    height:auto;
+    padding-top:env(safe-area-inset-top);
+    padding-left:max(12px,env(safe-area-inset-left));
+    padding-right:max(12px,env(safe-area-inset-right));
+  }
+  body.cs-admin .mobile-page{padding:0 2px}
+  body.cs-admin .mobile-page strong{font-size:.82rem;line-height:1.2}
+  body.cs-admin .mobile-page span{font-size:.62rem;line-height:1.2}
+
+  body.cs-admin .sidebar{
+    width:min(304px,88vw)!important;
+    max-width:304px;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+    padding-top:calc(14px + env(safe-area-inset-top))!important;
+    padding-bottom:calc(14px + env(safe-area-inset-bottom))!important;
+  }
+  body.cs-admin .brand{padding:0 10px 12px!important}
+  body.cs-admin .nav-group{margin:0 0 10px!important}
+  body.cs-admin .label{padding:7px 10px 5px!important;font-size:.62rem!important}
+  body.cs-admin .nav a{min-height:44px!important;padding:0 10px!important;font-size:.84rem!important}
+  body.cs-admin .foot{padding:10px 10px 2px!important}
+
+  body.cs-admin .content{padding:18px 14px calc(28px + env(safe-area-inset-bottom))!important}
+  body.cs-admin .head{align-items:flex-start!important;margin-bottom:18px!important}
+  body.cs-admin .head>div:first-child{max-width:100%}
+  body.cs-admin .head p{max-width:100%!important}
+  body.cs-admin .surface-head{gap:10px!important}
+  body.cs-admin .surface-head>div{min-width:0}
+
+  body.cs-admin .page-grid,
+  body.cs-admin .billing-grid,
+  body.cs-admin .analytics-grid,
+  body.cs-admin .users-grid,
+  body.cs-admin .ds-grid,
+  body.cs-admin .overview-grid,
+  body.cs-admin .overview-bottom{grid-template-columns:minmax(0,1fr)!important}
+
+  body.cs-admin .toolbar-card,
+  body.cs-admin .billing-toolbar,
+  body.cs-admin .ds-toolbar{width:100%;max-width:100%}
+
+  body.cs-admin .section-tabs,
+  body.cs-admin .tabs{
+    max-width:100%;
+    overflow-x:auto!important;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-inline:contain;
+    scrollbar-width:none;
+  }
+  body.cs-admin .section-tabs::-webkit-scrollbar,
+  body.cs-admin .tabs::-webkit-scrollbar{display:none}
+  body.cs-admin .section-tab,
+  body.cs-admin .tab{flex:0 0 auto;white-space:nowrap}
+
+  body.cs-admin .flow,
+  body.cs-admin .pipeline{
+    width:100%;
+    max-width:100%;
+    overflow-x:auto!important;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-inline:contain;
+    scroll-snap-type:x proximity;
+  }
+  body.cs-admin .flow-step,
+  body.cs-admin .step{scroll-snap-align:start}
+
+  body.cs-admin .wrap,
+  body.cs-admin .table-wrap,
+  body.cs-admin .history-wrap,
+  body.cs-admin [style*="overflow:auto"]{max-width:100%}
+
+  body.cs-admin pre,
+  body.cs-admin code,
+  body.cs-admin .domain,
+  body.cs-admin .linkish,
+  body.cs-admin .muted,
+  body.cs-admin dd,
+  body.cs-admin td,
+  body.cs-admin .profile-row div{overflow-wrap:anywhere;word-break:break-word}
+
+  body.cs-admin .dialog{width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto}
+}
+
+@media(max-width:700px){
+  body.cs-admin .content{padding:14px 10px calc(26px + env(safe-area-inset-bottom))!important}
+  body.cs-admin .head{gap:9px!important;margin-bottom:16px!important}
+  body.cs-admin .head .eyebrow{font-size:.68rem!important;margin-bottom:4px!important}
+  body.cs-admin .head h1{font-size:1.6rem!important;line-height:1.12!important;margin-bottom:5px!important}
+  body.cs-admin .head p{font-size:.79rem!important;line-height:1.45!important}
+
+  body.cs-admin .surface-head{padding:14px!important;align-items:flex-start!important;flex-wrap:wrap!important}
+  body.cs-admin .surface-head h3{font-size:.95rem!important}
+  body.cs-admin .surface-head p{font-size:.74rem!important}
+  body.cs-admin .surface-body{padding:14px!important}
+  body.cs-admin .admin-card{padding:14px!important}
+
+  body.cs-admin .stats-grid{gap:8px!important;margin-bottom:14px!important}
+  body.cs-admin .metric{min-height:76px!important;padding:12px!important}
+  body.cs-admin .metric strong{font-size:1.35rem!important;margin-bottom:6px!important}
+  body.cs-admin .metric span{font-size:.74rem!important}
+  body.cs-admin .metric small{font-size:.65rem!important;line-height:1.35}
+
+  body.cs-admin .toolbar-card,
+  body.cs-admin .billing-toolbar,
+  body.cs-admin .ds-toolbar{gap:8px!important;margin-bottom:14px!important}
+  body.cs-admin .toolbar-card input,
+  body.cs-admin .toolbar-card select,
+  body.cs-admin .billing-toolbar select,
+  body.cs-admin .ds-toolbar select{width:100%;min-width:0}
+
+  body.cs-admin .detail-grid,
+  body.cs-admin .answer-grid,
+  body.cs-admin .notes-layout,
+  body.cs-admin .editor-grid,
+  body.cs-admin .form-grid,
+  body.cs-admin .form-row,
+  body.cs-admin .billing-summary,
+  body.cs-admin .site-overview,
+  body.cs-admin .settings-grid,
+  body.cs-admin .template-grid,
+  body.cs-admin .checklist,
+  body.cs-admin .mini-grid,
+  body.cs-admin .sidebar-stack{grid-template-columns:minmax(0,1fr)!important}
+
+  body.cs-admin .customer-hero,
+  body.cs-admin .detail-head,
+  body.cs-admin .intake-banner{padding:14px!important}
+  body.cs-admin .customer-hero h2{font-size:1.3rem!important}
+  body.cs-admin .detail-actions,
+  body.cs-admin .editor-actions,
+  body.cs-admin .form-actions,
+  body.cs-admin .row-actions,
+  body.cs-admin .next-actions{gap:7px!important}
+
+  body.cs-admin .admin-table{display:block;width:100%;min-width:0!important}
+  body.cs-admin .admin-table thead{display:none!important}
+  body.cs-admin .admin-table tbody{display:grid!important;gap:8px!important;padding:0!important}
+  body.cs-admin .admin-table tr{display:block!important;width:100%;min-width:0;border:1px solid var(--cs-border-subtle,#ebe8ed)!important;border-radius:10px!important;background:#fff!important;overflow:hidden!important}
+  body.cs-admin .admin-table td{display:flex!important;width:100%!important;min-width:0!important;justify-content:space-between!important;align-items:flex-start!important;gap:12px!important;padding:10px 11px!important;text-align:right!important;border-top:1px solid var(--cs-border-subtle,#ebe8ed)!important;border-bottom:0!important}
+  body.cs-admin .admin-table td:first-child{border-top:0!important}
+  body.cs-admin .admin-table td::before{content:attr(data-label);flex:0 0 36%;max-width:36%;text-align:left;color:var(--cs-neutral-500,#8b8490);font-size:.66rem;font-weight:600;line-height:1.35}
+  body.cs-admin .admin-table td>*{min-width:0;max-width:64%}
+  body.cs-admin .admin-table td>div{min-width:0;max-width:64%}
+  body.cs-admin .admin-table td[colspan]{display:block!important;text-align:center!important;padding:18px 12px!important}
+  body.cs-admin .admin-table td[colspan]::before{display:none!important}
+  body.cs-admin .admin-table td[colspan]>*{max-width:100%}
+  body.cs-admin .admin-table .admin-action{max-width:100%;white-space:normal;text-align:center}
+
+  body.cs-admin .wrap,
+  body.cs-admin .table-wrap,
+  body.cs-admin .history-wrap,
+  body.cs-admin [style*="overflow:auto"]{overflow:visible!important}
+
+  body.cs-admin .pill{white-space:normal!important;text-align:right;justify-content:flex-end}
+  body.cs-admin .row-actions,
+  body.cs-admin .next-actions{justify-content:flex-end!important;min-width:0!important;max-width:64%}
+  body.cs-admin .row-actions .admin-action,
+  body.cs-admin .next-actions .admin-action{min-width:0!important}
+
+  body.cs-admin .messages{padding:12px!important;max-height:none!important}
+  body.cs-admin .msg{max-width:94%!important;font-size:.8rem!important}
+  body.cs-admin .composer{grid-template-columns:minmax(0,1fr)!important;padding:10px!important}
+  body.cs-admin .composer .admin-action{width:100%!important}
+
+  body.cs-admin[data-page="overview"] .content{padding-top:14px!important}
+  body.cs-admin[data-page="overview"] .overview-hero{padding:13px!important;margin-bottom:14px!important;gap:12px!important}
+  body.cs-admin[data-page="overview"] .overview-hero-copy{align-items:flex-start!important}
+  body.cs-admin[data-page="overview"] .overview-hero-icon{width:34px!important;height:34px!important}
+  body.cs-admin[data-page="overview"] .overview-actions{gap:7px!important}
+  body.cs-admin[data-page="overview"] .overview-kpis{gap:8px!important;margin-bottom:14px!important}
+  body.cs-admin[data-page="overview"] .overview-kpi{min-height:78px!important;padding:12px!important;gap:11px!important}
+  body.cs-admin[data-page="overview"] .overview-kpi-icon{width:34px!important;height:34px!important}
+  body.cs-admin[data-page="overview"] .overview-kpi strong{font-size:1.4rem!important}
+  body.cs-admin[data-page="overview"] .overview-kpi span{font-size:.74rem!important;margin-top:4px!important}
+  body.cs-admin[data-page="overview"] .overview-kpi small{font-size:.64rem!important}
+  body.cs-admin[data-page="overview"] .overview-main{gap:10px!important;margin-bottom:12px!important}
+  body.cs-admin[data-page="overview"] .overview-panel{padding:14px!important}
+  body.cs-admin[data-page="overview"] .overview-panel-head{margin-bottom:10px!important}
+  body.cs-admin[data-page="overview"] .overview-bottom{gap:10px!important}
+  body.cs-admin[data-page="overview"] .activity-list{padding:2px 14px 10px!important}
+  body.cs-admin[data-page="overview"] .pipeline-row{grid-template-columns:74px minmax(0,1fr) 20px!important;gap:7px!important}
+  body.cs-admin[data-page="overview"] .quick-row,
+  body.cs-admin[data-page="overview"] .attention-item{gap:9px!important;padding:9px 0!important}
+}
+
+@media(max-width:460px){
+  body.cs-admin .mobilebar{grid-template-columns:40px minmax(0,1fr) 34px;gap:6px;padding-left:max(9px,env(safe-area-inset-left));padding-right:max(9px,env(safe-area-inset-right))}
+  body.cs-admin .mobile-menu{width:38px;height:38px}
+  body.cs-admin .avatar{width:30px!important;height:30px!important}
+  body.cs-admin .content{padding-left:9px!important;padding-right:9px!important}
+  body.cs-admin .head h1{font-size:1.48rem!important}
+  body.cs-admin .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+  body.cs-admin .metric{padding:11px!important}
+  body.cs-admin .metric strong{font-size:1.28rem!important}
+  body.cs-admin .metric span{font-size:.7rem!important}
+  body.cs-admin .surface-head{padding:12px!important}
+  body.cs-admin .surface-body{padding:12px!important}
+
+  body.cs-admin .admin-action{padding-inline:11px!important;font-size:.8rem!important}
+  body.cs-admin .admin-action.compact{padding-inline:9px!important}
+
+  body.cs-admin .admin-table td{gap:9px!important;padding:9px 10px!important}
+  body.cs-admin .admin-table td::before{flex-basis:34%;max-width:34%;font-size:.63rem}
+  body.cs-admin .admin-table td>*,
+  body.cs-admin .admin-table td>div{max-width:66%}
+
+  body.cs-admin[data-page="overview"] .overview-kpis{grid-template-columns:minmax(0,1fr)!important}
+  body.cs-admin[data-page="overview"] .overview-actions{grid-template-columns:minmax(0,1fr)!important}
+  body.cs-admin[data-page="overview"] .overview-panel-head{align-items:flex-start!important}
+}
+
+@media(max-width:360px){
+  body.cs-admin .stats-grid{grid-template-columns:minmax(0,1fr)!important}
+  body.cs-admin .mobile-page span{display:none}
+  body.cs-admin .content{padding-left:8px!important;padding-right:8px!important}
+}
