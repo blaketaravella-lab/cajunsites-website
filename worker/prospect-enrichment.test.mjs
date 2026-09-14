@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const enrichment=fs.readFileSync('worker/prospect-enrichment.js','utf8');
 const billing=fs.readFileSync('worker/billing.js','utf8');
 const designChat=fs.readFileSync('worker/design-chat.js','utf8');
+const designStudio=fs.readFileSync('src/pages/admin/design-studio.astro','utf8');
 const hardening=fs.readFileSync('worker/platform-hardening.js','utf8');
 const reliability=fs.readFileSync('worker/reliability-hotfix.js','utf8');
 const conceptDesign=fs.readFileSync('worker/concept-design-worker.js','utf8');
@@ -47,6 +48,10 @@ must(designChat.includes("const PROFILE_KEYS=['archetype','mood','image_theme','
 must(designChat.includes('normalizeProposal'),'Every AI design proposal must be normalized through the allowlist.');
 must(designChat.includes("role='assistant'")&&designChat.includes('proposal_json'),'Only stored assistant proposals may be applied.');
 must(designChat.includes("p.research_status!=='Complete'"),'Design Studio must require completed research before applying a design.');
+must(designChat.includes('rebuild_required:true'),'Design Studio apply must save directives without invoking the lower Worker build path.');
+must(!designChat.includes('const build=await appWorker.fetch(new Request(url.toString()'),'Design Studio must not bypass the top-level Concept Build worker.');
+must(designStudio.includes("fetch(`/api/admin/prospects/${id}/build-concept`"),'Design Studio UI must start rebuilds through the public top-level Concept Build endpoint.');
+must(designStudio.includes('error_stage')&&designStudio.includes('build_id')&&designStudio.includes('rolled_back'),'Design Studio must preserve actionable rebuild diagnostics.');
 must(designMigration.includes('design_chat_messages')&&designMigration.includes('design_directives_json'),'Design Studio must have canonical isolated persistence.');
 
 must(sourceRouter.includes('free_first_confidence_driven'),'Business data sources must use a free-first confidence-driven plan.');
