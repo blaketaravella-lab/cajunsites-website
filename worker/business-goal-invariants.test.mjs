@@ -11,6 +11,9 @@ const designStudio = read('src/pages/admin/design-studio.astro');
 const designChat = read('worker/design-chat.js');
 const conceptWorker = read('worker/concept-design-worker.js');
 const conceptFactory = read('worker/concept-factory-v2.js');
+const conceptArchitecture = read('worker/concept-architecture.js');
+const designIntelligence = read('worker/design-intelligence.js');
+const visualEngine = read('worker/visual-family-engine.js');
 const staleRecovery = read('worker/stale-build-recovery.js');
 const imagePipeline = read('worker/image-pipeline/ai-image-pipeline.js');
 const imagePolicyResolver = read('worker/image-pipeline/policy-resolver.js');
@@ -29,6 +32,8 @@ assert.doesNotMatch(adminShell, /Outreach Center/i,'Outreach Center must remain 
 assert.doesNotMatch(enrichment, /sendgrid|twilio|cold email|cold-email|send sms|sendSMS/i,'Automated prospect enrichment must not execute outbound outreach.');
 
 assert.match(designChat, /rebuild_required:true/,'Design Studio apply must save directives and require an explicit rebuild.');
+assert.match(designChat, /business_truth_locked:true/,'Design Studio must preserve verified business truth while editing the design model.');
+assert.match(designChat, /concept_design_model_json/,'Design Studio must work against the structured concept design model.');
 assert.match(designStudio, /fetch\(`\/api\/admin\/prospects\/\$\{id\}\/build-concept`/,'Design Studio rebuilds must use the top-level Concept Build endpoint.');
 assert.match(designStudio, /error_stage/,'Design Studio must surface build failure stages.');
 assert.match(designStudio, /build_id/,'Design Studio must surface build IDs.');
@@ -36,6 +41,18 @@ assert.match(designStudio, /build_id/,'Design Studio must surface build IDs.');
 assert.match(wrangler, /"main": "\.\/worker\/concept-design-worker\.js"/,'Concept Design Worker must remain the production Worker entry point.');
 assert.match(conceptWorker, /import appWorker from '\.\/stale-build-recovery\.js'/,'Stale build recovery must remain in the top-level Worker chain.');
 assert.match(conceptWorker, /import staticBuildWorker from '\.\/concept-factory-v2\.js'/,'All concept builds must use the canonical atomic preview deployer.');
+assert.match(conceptWorker, /compileConceptArchitecture/,'Every build must compile the verified business profile and concept strategy before generation.');
+assert.match(conceptWorker, /verified_business_profile_json/,'Verified Business Profile must be persisted as a first-class build artifact.');
+assert.match(conceptWorker, /concept_strategy_json/,'Concept Strategy must be persisted as a first-class build artifact.');
+assert.match(conceptWorker, /concept_design_model_json/,'Concept Design Model must be persisted as a first-class build artifact.');
+assert.match(conceptWorker, /concept_image_plan_json/,'Concept Image Plan must be persisted as a first-class build artifact.');
+assert.match(conceptArchitecture, /location_match_required:true/,'Business Name + City + State must remain the research/build identity anchor.');
+assert.match(conceptArchitecture, /profile_fingerprint/,'Verified profile changes must be distinguishable from design-only rebuilds.');
+assert.match(conceptArchitecture, /canReuse/,'Unchanged business truth should reuse a stable concept strategy across rebuilds.');
+assert.match(designIntelligence, /vertical_policy:'profile_driven'/,'Design intelligence must be profile-driven rather than dependent on a fixed vertical policy table.');
+assert.match(visualEngine, /concept_design_model_json/,'The renderer must consume the structured Concept Design Model.');
+assert.match(visualEngine, /visual-family-v7-architecture/,'The production renderer must use the architecture-aware visual system.');
+
 assert.match(conceptWorker, /concept-preview/,'Design Studio must use a prospect-specific exact deployment preview route.');
 assert.match(conceptWorker, /concept_deployment_id/,'Design Studio preview selection must bind to the selected prospect deployment ID.');
 assert.match(conceptWorker, /x-cajunsites-prospect-id/,'Exact preview responses must retain the selected prospect identity for diagnostics.');
@@ -60,10 +77,13 @@ assert.doesNotMatch(conceptFactory, /target:'production'/,'Concept builds must n
 
 assert.match(imagePipeline, /representative only/i,'Generated concept imagery must be explicitly representative.');
 assert.match(imagePipeline, /MAX_ATTEMPTS=3/,'Image generation must remain bounded.');
+assert.match(imagePipeline, /concept_image_plan_json/,'Image generation must consume the compiled Concept Image Plan.');
+assert.match(imagePipeline, /image_plan_source/,'Image-plan usage must remain observable.');
 assert.match(imagePipeline, /\/assets\/hero\.webp/,'Concept hero imagery must use deployment-local assets.');
 assert.match(imagePipeline, /\/assets\/secondary\.webp/,'Concept secondary imagery must use deployment-local assets.');
-assert.match(imagePolicyResolver, /policy_id:'food\.restaurant'/,'Restaurant concepts must retain restaurant-specific visual QA.');
+assert.match(imagePolicyResolver, /(?:policyId|policy_id):'food\.restaurant'/,'Restaurant concepts must retain restaurant-specific visual QA.');
 assert.match(imagePolicyResolver, /secondary image/i,'Restaurant visual QA must explicitly support distinct secondary compositions.');
+assert.match(imagePolicyResolver, /policy_mode/,'Visual policy resolution must expose specialized, derived, generic-safe, or blocked behavior.');
 assert.doesNotMatch(wrangler, /r2_buckets|IMAGE_ASSETS/,'Concept images must not silently reintroduce an R2 dependency.');
 
 const visualIndex = globalCss.indexOf("@import './admin-visual-alignment.css';");
