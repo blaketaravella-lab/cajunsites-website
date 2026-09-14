@@ -140,7 +140,6 @@ async function refreshVisualInspiration(env,id,{force=false}={}){
 
 async function readJsonClone(request){try{return await request.clone().json()}catch{return null}}
 function internalPostRequest(request,path){const url=new URL(request.url);url.pathname=path;url.search='';const headers=new Headers({'content-type':'application/json'});const cookie=request.headers.get('cookie');if(cookie)headers.set('cookie',cookie);headers.set('origin',url.origin);return new Request(url.toString(),{method:'POST',headers,body:'{}'})}
-async function recordAutomationFailure(env,id,field,message){await env.DB.prepare(`UPDATE prospects SET ${field}=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(clean(message,1000),id).run().catch(()=>{})}
 
 async function ensureResearch(worker,request,env,context,id){
   const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p||p.research_status==='Complete')return true;
@@ -155,19 +154,9 @@ async function prepareConceptBuild(worker,request,env,context,id){
 }
 
 async function queueAutoResearchAndBuild(worker,request,env,context,id){
-  await ensureSchema(env);await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();await setJob(env,id,'Queued','Research');
-  const task=(async()=>{
-    try{
-      await setJob(env,id,'Running','Research');
-      const researchOk=await ensureResearch(worker,request,env,context,id);
-      if(!researchOk){const message='Automatic research did not complete.';await recordAutomationFailure(env,id,'research_error',message);await setJob(env,id,'Failed','Research',message);return}
-      await setJob(env,id,'Running','Concept Build');
-      const buildResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/build-concept`),env,context);
-      if(!buildResponse.ok){const payload=await buildResponse.clone().json().catch(()=>({}));const message=clean(payload?.error||`Automatic concept build failed (${buildResponse.status})`,1000);await setJob(env,id,'Failed','Concept Build',message);console.error('Automatic concept build failed',{prospectId:id,error:message});return}
-      await setJob(env,id,'Complete','Deployed');
-    }catch(error){const message=clean(error?.message||error,1000);await recordAutomationFailure(env,id,'research_error',message);await setJob(env,id,'Failed','Automation',message);console.error('Automatic prospect workflow failed',{prospectId:id,error:message})}
-  })();
-  if(context?.waitUntil)context.waitUntil(task);else await task;
+  await ensureSchema(env);
+  await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+  await setJob(env,id,'Queued','Browser Research & Build');
 }
 
 const worker={

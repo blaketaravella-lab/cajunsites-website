@@ -4,6 +4,7 @@ const enrichment=fs.readFileSync('worker/prospect-enrichment.js','utf8');
 const billing=fs.readFileSync('worker/billing.js','utf8');
 const designChat=fs.readFileSync('worker/design-chat.js','utf8');
 const designStudio=fs.readFileSync('src/pages/admin/design-studio.astro','utf8');
+const prospectPage=fs.readFileSync('src/pages/admin/prospect.astro','utf8');
 const hardening=fs.readFileSync('worker/platform-hardening.js','utf8');
 const reliability=fs.readFileSync('worker/reliability-hotfix.js','utf8');
 const staleRecovery=fs.readFileSync('worker/stale-build-recovery.js','utf8');
@@ -37,11 +38,16 @@ must(migration.includes('enrichment_provenance_json'),'Canonical migration must 
 must(!enrichment.includes('call_attempts')&&!enrichment.includes('next_follow_up')&&!enrichment.includes('decision_maker_reached'),'Research enrichment must not mutate human sales workflow fields.');
 must(enrichment.includes('queueAutoResearchAndBuild'),'New prospect creation must queue the automatic research and concept-build workflow.');
 must(enrichment.includes("research_status='Queued'"),'Automatic research must expose a queued state.');
-must(enrichment.includes('context?.waitUntil'),'Automatic prospect workflow must run asynchronously when the Worker execution context is available.');
+must(enrichment.includes("'Browser Research & Build'"),'New prospects must be handed off to the browser-driven long-running workflow.');
+must(!enrichment.includes('context?.waitUntil'),'Research plus concept generation must not run in a Worker waitUntil task that can expire mid-build.');
+must(prospectPage.includes('runQueuedAutomation'),'Prospect Details must resume queued new-prospect automation from the active browser session.');
+must(prospectPage.includes("/research`,{method:'POST'")&&prospectPage.includes("/build-concept`,{method:'POST'"),'Browser automation must run research before the normal top-level concept build endpoint.');
+must(conceptDesign.includes('buildGate'),'Top-level Concept Build must prevent overlapping builds.');
+must(conceptDesign.includes("concept_state='Building'")||conceptDesign.includes("concept_state!=='Building'"),'Build gate must understand the Building state.');
 must(enrichment.includes('places.googleapis.com/v1/places:searchText'),'Google Places enrichment must remain available when confidence routing calls for it.');
 must(enrichment.includes('skipHttpRedirect=true'),'Google Place photos must be transient analysis inputs only.');
 must(enrichment.includes('Do not copy, reproduce, trace, crop, embed, or otherwise reuse any source photo'),'Visual analysis must prohibit copying source photos.');
-must(staleRecovery.includes("p.concept_state='Building'")&&staleRecovery.includes('STALE_MINUTES=15'),'Interrupted automatic concept builds must self-heal instead of remaining Building forever.');
+must(staleRecovery.includes("p.concept_state='Building'")&&staleRecovery.includes('STALE_MINUTES=15'),'Interrupted concept builds must self-heal instead of remaining Building forever.');
 
 must(designChat.includes('a tightly constrained website-design assistant'),'Design Studio must use an explicit website-design-only system boundary.');
 must(designChat.includes('You have no tools, no code execution, no filesystem, no database access'),'Design Studio prompt must deny tool, code, filesystem, and database capabilities.');
