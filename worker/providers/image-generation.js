@@ -1,5 +1,5 @@
 const clean=(v,m=1000)=>String(v??'').trim().slice(0,m);
-const DEFAULT_IMAGE_MODEL='gpt-image-2.5-flare';
+const DEFAULT_IMAGE_MODEL='gpt-image-2.5-sunburst';
 const DEFAULT_QA_MODEL='gpt-5.6-luna';
 
 function responseText(d){if(typeof d?.output_text==='string')return d.output_text.trim();const out=[];for(const item of d?.output||[])for(const c of item?.content||[])if(c?.type==='output_text'&&c?.text)out.push(c.text);return out.join('\n').trim()}
