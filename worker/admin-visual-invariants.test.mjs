@@ -4,7 +4,10 @@ const css=fs.readFileSync('src/styles/admin-visual-alignment.css','utf8');
 const global=fs.readFileSync('src/styles/global.css','utf8');
 const must=(condition,message)=>{if(!condition)throw new Error(message)};
 
-must(global.trim().endsWith("@import './admin-visual-alignment.css';"),'Admin visual alignment must load last in the CSS stack.');
+const visualImport="@import './admin-visual-alignment.css';";
+const spacingImport="@import './admin-content-spacing.css';";
+must(global.includes(visualImport),'Admin visual alignment must be loaded in the CSS stack.');
+must(global.indexOf(visualImport)<global.indexOf(spacingImport),'Content spacing may load after visual alignment, but visual alignment must precede it.');
 for(const selector of ['.focus-card','.intake-banner','.revenue-card','.security','.tax','.template-preview','.flow-step','.summary-box','.setting']){
   must(css.includes(selector),`Visual alignment must normalize ${selector}.`);
 }

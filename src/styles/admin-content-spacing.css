@@ -1,0 +1,110 @@
+/* Admin content spacing normalization.
+   Ensures labels, values, helper text, and metadata never visually run together. */
+
+body.cs-admin .metric {
+  display: grid !important;
+  grid-template-rows: auto auto auto !important;
+  align-content: start !important;
+  row-gap: 0 !important;
+  min-width: 0 !important;
+}
+body.cs-admin .metric > strong {
+  display: block !important;
+  margin: 0 0 10px !important;
+  line-height: 1 !important;
+}
+body.cs-admin .metric > span {
+  display: block !important;
+  margin: 0 !important;
+  line-height: 1.35 !important;
+}
+body.cs-admin .metric > small {
+  display: block !important;
+  margin-top: 5px !important;
+  line-height: 1.4 !important;
+}
+
+body.cs-admin .focus-stats > div,
+body.cs-admin .mini,
+body.cs-admin .summary-box,
+body.cs-admin .answer,
+body.cs-admin .info,
+body.cs-admin .site-panel,
+body.cs-admin .setting-meta,
+body.cs-admin .template-meta {
+  min-width: 0 !important;
+}
+
+body.cs-admin .focus-stats > div > strong,
+body.cs-admin .mini > strong,
+body.cs-admin .summary-box > strong,
+body.cs-admin .answer > strong,
+body.cs-admin .info > strong,
+body.cs-admin .site-panel > strong {
+  display: block !important;
+  margin-bottom: 5px !important;
+  line-height: 1.2 !important;
+}
+
+body.cs-admin .focus-stats > div > span,
+body.cs-admin .mini > span,
+body.cs-admin .summary-box > span,
+body.cs-admin .summary-box > small,
+body.cs-admin .answer > span,
+body.cs-admin .answer > small,
+body.cs-admin .info > span,
+body.cs-admin .info > small,
+body.cs-admin .site-panel > span,
+body.cs-admin .site-panel > small,
+body.cs-admin .setting-meta > span,
+body.cs-admin .setting-meta > small,
+body.cs-admin .template-meta > span,
+body.cs-admin .template-meta > small {
+  display: block !important;
+  line-height: 1.4 !important;
+}
+
+body.cs-admin .summary-box > small,
+body.cs-admin .answer > small,
+body.cs-admin .info > small,
+body.cs-admin .site-panel > small,
+body.cs-admin .setting-meta > small,
+body.cs-admin .template-meta > small {
+  margin-top: 4px !important;
+}
+
+body.cs-admin .surface-head h3 + p,
+body.cs-admin .detail-head h3 + p,
+body.cs-admin .customer-hero h2 + p,
+body.cs-admin .setting h3 + p,
+body.cs-admin .template-card h3 + p {
+  margin-top: 5px !important;
+}
+
+body.cs-admin .subtle,
+body.cs-admin .note,
+body.cs-admin .helper,
+body.cs-admin .field-help,
+body.cs-admin .muted {
+  line-height: 1.45 !important;
+}
+
+body.cs-admin .admin-table td strong + .subtle,
+body.cs-admin .admin-table td a + .subtle,
+body.cs-admin .admin-table td .pill + .subtle {
+  display: block !important;
+  margin-top: 4px !important;
+}
+
+body.cs-admin .concept-status,
+body.cs-admin .row-actions,
+body.cs-admin .invoice-links,
+body.cs-admin .setting-actions,
+body.cs-admin .template-actions {
+  gap: 7px !important;
+}
+
+@media (max-width: 700px) {
+  body.cs-admin .metric > strong { margin-bottom: 8px !important; }
+  body.cs-admin .metric > small { margin-top: 4px !important; }
+}

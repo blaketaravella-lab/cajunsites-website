@@ -37,6 +37,8 @@ jobs:
         run: node worker/admin-nav-invariants.test.mjs
       - name: Test Admin Visual Alignment Invariants
         run: node worker/admin-visual-invariants.test.mjs
+      - name: Test Admin Content Spacing Invariants
+        run: node worker/admin-content-spacing.test.mjs
       - name: Test Prospect Enrichment Invariants
         run: node worker/prospect-enrichment.test.mjs
       - name: Test Concept Verification Invariants
