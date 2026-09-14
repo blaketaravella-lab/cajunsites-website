@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {resolveDesignSpec} from './design-intelligence.js';
+const p=(category,name='Test Business',extra={})=>({id:1,business_name:name,category,research_json:JSON.stringify({vertical:category,services:[],design_profile:{}}),...extra});
+const barber=resolveDesignSpec(p('Barbershop','Sidelines Barbershop'));
+assert.equal(barber.vertical_policy,'beauty.barber');assert.equal(barber.objective,'appointment');assert.equal(barber.mobile_strategy,'sticky_conversion_bar');assert.ok(barber.section_sequence.includes('gallery'));assert.ok(barber.cta_strategy.includes('Book'));
+const plumber=resolveDesignSpec(p('Plumbing'));
+assert.equal(plumber.vertical_policy,'plumbing');assert.equal(plumber.objective,'lead');assert.ok(plumber.cta_strategy.includes('Call Now'));
+const legal=resolveDesignSpec(p('Law Firm'));
+assert.equal(legal.vertical_policy,'legal');assert.equal(legal.content_density,'information_rich');
+const override=resolveDesignSpec(p('Barbershop','Override',{design_directives_json:JSON.stringify({headline:'A better cut',cta_strategy:['Reserve'],section_sequence:['hero','gallery','cta'],mobile_strategy:'sticky_primary_cta'})}));
+assert.equal(override.headline,'A better cut');assert.deepEqual(override.cta_strategy,['Reserve']);assert.deepEqual(override.section_sequence,['hero','gallery','cta']);assert.equal(override.source,'design_studio_override');
+const generic=resolveDesignSpec(p('Unknown Local Business'));
+assert.equal(generic.vertical_policy,'generic');assert.equal(generic.objective,'contact');
+console.log('Design intelligence invariants passed.');
