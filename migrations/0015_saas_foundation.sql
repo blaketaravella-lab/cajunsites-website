@@ -103,12 +103,16 @@ ALTER TABLE prospects ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE customers ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE concept_builds ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE concept_images ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE design_chat_messages ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE admin_activity ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS idx_prospects_tenant_id ON prospects (tenant_id, id);
 CREATE INDEX IF NOT EXISTS idx_customers_tenant_id ON customers (tenant_id, id);
 CREATE INDEX IF NOT EXISTS idx_concept_builds_tenant_id ON concept_builds (tenant_id, prospect_id);
+CREATE INDEX IF NOT EXISTS idx_concept_builds_tenant_build ON concept_builds (tenant_id, build_id);
 CREATE INDEX IF NOT EXISTS idx_concept_images_tenant_id ON concept_images (tenant_id, prospect_id);
+CREATE INDEX IF NOT EXISTS idx_concept_images_tenant_build ON concept_images (tenant_id, build_id);
+CREATE INDEX IF NOT EXISTS idx_design_chat_tenant_prospect ON design_chat_messages (tenant_id, prospect_id, id);
 CREATE INDEX IF NOT EXISTS idx_admin_activity_tenant_id ON admin_activity (tenant_id, created_at);
 
 -- Existing admins become members of CajunSites. This keeps current access working while
