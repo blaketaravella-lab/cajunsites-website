@@ -47,5 +47,7 @@ jobs:
         run: node worker/image-pipeline.test.mjs
       - name: Test Business Goal Alignment Invariants
         run: node worker/business-goal-invariants.test.mjs
+      - name: Test Customer Lifecycle Invariants
+        run: node worker/customer-lifecycle.test.mjs
       - name: Build Astro site
         run: npm run build
