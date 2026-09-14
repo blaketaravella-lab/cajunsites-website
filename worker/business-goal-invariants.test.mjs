@@ -36,6 +36,10 @@ assert.match(designStudio, /build_id/,'Design Studio must surface build IDs.');
 assert.match(wrangler, /"main": "\.\/worker\/concept-design-worker\.js"/,'Concept Design Worker must remain the production Worker entry point.');
 assert.match(conceptWorker, /import appWorker from '\.\/stale-build-recovery\.js'/,'Stale build recovery must remain in the top-level Worker chain.');
 assert.match(conceptWorker, /import staticBuildWorker from '\.\/concept-factory-v2\.js'/,'All concept builds must use the canonical atomic preview deployer.');
+assert.match(conceptWorker, /concept-preview/,'Design Studio must use a prospect-specific exact deployment preview route.');
+assert.match(conceptWorker, /concept_deployment_id/,'Design Studio preview selection must bind to the selected prospect deployment ID.');
+assert.match(conceptWorker, /x-cajunsites-prospect-id/,'Exact preview redirects must retain the selected prospect identity for diagnostics.');
+assert.match(conceptWorker, /designChatWithExactPreview/,'Design chat responses must be rewritten to the exact selected prospect preview.');
 assert.match(staleRecovery, /STALE_MINUTES=15/,'Interrupted concept builds must self-heal instead of staying Building forever.');
 
 assert.match(conceptFactory, /verifySourceFiles/,'Concept preview deployments must verify exact stored source files before activation.');
