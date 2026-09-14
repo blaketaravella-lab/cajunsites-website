@@ -115,4 +115,4 @@ CREATE INDEX IF NOT EXISTS idx_admin_activity_tenant_id ON admin_activity (tenan
 -- allowing future users to belong to one or more agencies.
 INSERT OR IGNORE INTO tenant_memberships (tenant_id, admin_user_id, role, status)
 SELECT 1, id, COALESCE(role, 'operator'), 'active'
-FROM admin_users;
+FROM internal_users;
