@@ -100,11 +100,10 @@ function readResearch(p){try{return p.research_json?JSON.parse(p.research_json):
 
 async function verifyDeployment(baseUrl,html){
   if(!baseUrl)throw new Error('Vercel deployment URL was not available for verification.');
+  if(!html.includes('/assets/hero.webp')||!html.includes('/assets/secondary.webp'))throw new Error('Concept packaging failed: generated HTML does not reference both local AI image assets.');
   const [page,hero,secondary]=await Promise.all([fetch(`${baseUrl}/`),fetch(`${baseUrl}/assets/hero.webp`),fetch(`${baseUrl}/assets/secondary.webp`)]);
   if(!page.ok)throw new Error(`Concept verification failed: index returned ${page.status}.`);
   const deployedHtml=await page.text();
-  if(!deployedHtml.includes('/assets/hero.webp')||!deployedHtml.includes('/assets/secondary.webp'))throw new Error('Concept verification failed: deployed HTML does not reference both local AI image assets.');
-  if(!html.includes('/assets/hero.webp')||!html.includes('/assets/secondary.webp'))throw new Error('Concept packaging failed: generated HTML does not reference both local AI image assets.');
   if(/images\.unsplash\.com|images\.pexels\.com|\/api\/images\//i.test(deployedHtml))throw new Error('Concept verification failed: an external legacy concept image URL remains in the deployed HTML.');
   for(const [role,r] of [['hero',hero],['secondary',secondary]]){if(!r.ok)throw new Error(`Concept verification failed: ${role} image returned ${r.status}.`);if(!String(r.headers.get('content-type')||'').toLowerCase().startsWith('image/'))throw new Error(`Concept verification failed: ${role} asset is not served as an image.`)}
 }
