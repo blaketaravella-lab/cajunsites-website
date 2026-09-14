@@ -3,18 +3,7 @@ import fs from 'node:fs';
 import {resolveImagePolicy} from './image-pipeline/policy-resolver.js';
 import {buildImageBrief} from './image-pipeline/ai-image-pipeline.js';
 
-const sidelines={
-  id:1,
-  business_name:'Sidelines Barbershop',
-  category:'Barbershop',
-  research_json:JSON.stringify({
-    vertical:'Automotive Repair',
-    identity_confidence:'high',
-    services:[{name:'Engine Repair',confidence:'high'}],
-    design_profile:{image_theme:'mechanic garage engines',mood:'bold'}
-  }),
-  enrichment_provenance_json:JSON.stringify({category:{origin:'manual'}})
-};
+const sidelines={id:1,business_name:'Sidelines Barbershop',category:'Barbershop',research_json:JSON.stringify({vertical:'Automotive Repair',identity_confidence:'high',services:[{name:'Engine Repair',confidence:'high'}],design_profile:{image_theme:'mechanic garage engines',mood:'bold'}}),enrichment_provenance_json:JSON.stringify({category:{origin:'manual'}})};
 const sidelinesPolicy=resolveImagePolicy(sidelines);
 assert.equal(sidelinesPolicy.policy_id,'beauty.barber','Trusted barbershop identity must beat conflicting research imagery.');
 assert.equal(sidelinesPolicy.identity.trusted_family,'barber');
@@ -26,13 +15,7 @@ assert.match(heroBrief.prompt,/mechanic|automotive|engine/i,'Barber policy must 
 assert.match(heroBrief.prompt,/30 percent negative space/i,'Hero prompt must reserve website copy space.');
 assert.match(heroBrief.prompt,/representative only/i,'Generated imagery must remain representative, never actual-work evidence.');
 
-const dentist={
-  business_name:'Example Dental',
-  category:'Dentistry',
-  verified_services_json:JSON.stringify([{name:'Dental Cleaning'}]),
-  enrichment_provenance_json:JSON.stringify({category:{origin:'manual'},verified_services_json:{origin:'manual'}}),
-  research_json:JSON.stringify({vertical:'Dentistry',services:[{name:'Dental Implants',confidence:'high'}]})
-};
+const dentist={business_name:'Example Dental',category:'Dentistry',verified_services_json:JSON.stringify([{name:'Dental Cleaning'}]),enrichment_provenance_json:JSON.stringify({category:{origin:'manual'},verified_services_json:{origin:'manual'}}),research_json:JSON.stringify({vertical:'Dentistry',services:[{name:'Dental Implants',confidence:'high'}]})};
 const dentalPolicy=resolveImagePolicy(dentist);
 assert.equal(dentalPolicy.policy_id,'healthcare.dentistry');
 assert.deepEqual(dentalPolicy.verified_service_names,['Dental Cleaning'],'Manual verified services must override research services.');
@@ -45,13 +28,17 @@ assert.match(generic.policy_id,/^general\./,'Unmodeled specialties must receive 
 assert.ok(generic.allowed_image_subjects.some(x=>/cafe|restaurant/i.test(x)),'Generic policy must retain business-specific visual cues.');
 
 const pipeline=fs.readFileSync('worker/image-pipeline/ai-image-pipeline.js','utf8');
+const provider=fs.readFileSync('worker/providers/image-generation.js','utf8');
 const concept=fs.readFileSync('worker/concept-factory.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const migration=fs.readFileSync('migrations/0013_ai_image_pipeline.sql','utf8');
 assert.match(pipeline,/MAX_ATTEMPTS=3/,'Image generation must cap retries.');
 assert.match(pipeline,/Suitable \$\{role\} imagery could not be verified/,'Image pipeline must fail closed after retry exhaustion.');
-assert.match(pipeline,/gpt-image-2\.5-sunburst/,'Production image generation must use the current GPT Image provider default.');
-assert.match(pipeline,/1536x1024/,'Concept images must be generated landscape.');
+assert.match(provider,/gpt-image-2\.5-sunburst/,'Production image provider must preserve the current model default.');
+assert.match(provider,/1536x1024/,'Image provider must support landscape concept images.');
+assert.match(pipeline,/generateImageAsset/,'Image generation must run through the provider abstraction.');
+assert.match(pipeline,/evaluateImageAsset/,'Visual QA must run through the provider abstraction.');
+assert.match(pipeline,/provider_usage_events/,'Image provider usage must be observable.');
 assert.match(pipeline,/\/assets\/hero\.webp/,'Hero must use a stable deployment-local asset path.');
 assert.match(pipeline,/\/assets\/secondary\.webp/,'Secondary must use a stable deployment-local asset path.');
 assert.doesNotMatch(pipeline,/IMAGE_ASSETS|serveImageAsset|storage_key|public_url/,'Image pipeline must not depend on R2 or a separate public image service.');
@@ -70,6 +57,6 @@ assert.match(migration,/concept_builds/,'Canonical migration must retain build h
 assert.match(migration,/asset_path/,'Canonical image metadata must store deployment-local asset paths.');
 assert.match(migration,/concept_build_id/,'Prospects must reference their current concept build.');
 assert.doesNotMatch(wrangler,/IMAGE_ASSETS|r2_buckets/,'Worker configuration must not require Cloudflare R2 for concept images.');
-assert.match(wrangler,/"main": "\.\/worker\/design-chat\.js"/,'Design Studio must remain the top-level Worker after removing R2 serving.');
+assert.match(wrangler,/"main": "\.\/worker\/platform-hardening\.js"/,'Platform hardening must be the top-level Worker.');
 
 console.log('AI image pipeline invariants passed.');
