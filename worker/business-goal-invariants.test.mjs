@@ -28,7 +28,7 @@ assert.match(enrichment, /manual_existing/,'Existing human-entered prospect data
 assert.match(enrichment, /protectedSnapshot/,'Research enrichment must preserve protected prospect values.');
 assert.doesNotMatch(enrichment, /UPDATE prospects SET[^\n]*(call_attempts|next_follow_up|decision_maker_reached)/,'Automated research must not mutate human sales workflow fields.');
 
-assert.doesNotMatch(adminShell, /Outreach Center/i,'Outreach Center must remain off the active admin navigation until explicitly approved.');
+assert.match(adminShell, /Outreach/i,'The approved manual Outreach workspace must remain in active admin navigation.');
 assert.doesNotMatch(enrichment, /sendgrid|twilio|cold email|cold-email|send sms|sendSMS/i,'Automated prospect enrichment must not execute outbound outreach.');
 
 assert.match(designChat, /rebuild_required:true/,'Design Studio apply must save directives and require an explicit rebuild.');
