@@ -1,0 +1,199 @@
+/* Final admin visual-alignment layer.
+   Overview is the visual benchmark: quiet surfaces, restrained typography,
+   selective purple/gold, minimal gradients, and whitespace-first hierarchy. */
+
+body.cs-admin .focus-card,
+body.cs-admin .intake-banner,
+body.cs-admin .revenue-card,
+body.cs-admin .security,
+body.cs-admin .tax,
+body.cs-admin .template-preview,
+body.cs-admin .template-preview.pro,
+body.cs-admin .template-preview.wellness {
+  background: #fff !important;
+  color: var(--cs-neutral-950, #18151b) !important;
+}
+
+body.cs-admin .focus-card,
+body.cs-admin .intake-banner,
+body.cs-admin .revenue-card,
+body.cs-admin .security,
+body.cs-admin .tax {
+  border: 1px solid var(--cs-border-subtle, #ebe8ed) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+body.cs-admin .focus-card { border-left: 4px solid var(--cs-purple-900, #2d0b50) !important; }
+body.cs-admin .focus-card h3,
+body.cs-admin .focus-card p,
+body.cs-admin .focus-card strong,
+body.cs-admin .focus-card span,
+body.cs-admin .revenue-card h3,
+body.cs-admin .revenue-card p,
+body.cs-admin .revenue-card .revenue-big,
+body.cs-admin .revenue-card .revenue-sub,
+body.cs-admin .revenue-card .note {
+  color: inherit !important;
+}
+body.cs-admin .focus-card p,
+body.cs-admin .focus-card span,
+body.cs-admin .revenue-card p,
+body.cs-admin .revenue-card .revenue-sub,
+body.cs-admin .revenue-card .note { color: var(--cs-neutral-600, #6d6672) !important; }
+
+body.cs-admin .focus-stats strong,
+body.cs-admin .revenue-big,
+body.cs-admin .count,
+body.cs-admin .money,
+body.cs-admin .summary-box strong {
+  color: var(--cs-neutral-950, #18151b) !important;
+  font-weight: 700 !important;
+}
+
+body.cs-admin .revenue-big { font-size: clamp(2rem, 4vw, 2.55rem) !important; }
+body.cs-admin .fill { background: var(--cs-purple-700, #54218a) !important; }
+
+body.cs-admin .mini,
+body.cs-admin .summary-box,
+body.cs-admin .info,
+body.cs-admin .answer,
+body.cs-admin .note,
+body.cs-admin .flow-step,
+body.cs-admin .site-panel,
+body.cs-admin .setting {
+  background: #fff !important;
+  border: 1px solid var(--cs-border-subtle, #ebe8ed) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+body.cs-admin .mini strong,
+body.cs-admin .mini span { color: var(--cs-neutral-800, #39343d) !important; }
+body.cs-admin .mini span { color: var(--cs-neutral-600, #6d6672) !important; }
+
+body.cs-admin .billing-toolbar,
+body.cs-admin .toolbar-card,
+body.cs-admin .ds-toolbar {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+body.cs-admin .site-overview {
+  gap: 10px !important;
+  margin-bottom: 18px !important;
+}
+body.cs-admin .site-panel { padding: 16px 18px !important; }
+
+body.cs-admin .flow {
+  gap: 4px !important;
+  margin-bottom: 18px !important;
+}
+body.cs-admin .flow-step {
+  min-height: 62px !important;
+  padding: 10px 8px !important;
+  color: var(--cs-neutral-600, #6d6672) !important;
+  font-size: .7rem !important;
+  font-weight: 500 !important;
+}
+body.cs-admin .flow-step strong {
+  color: var(--cs-purple-900, #2d0b50) !important;
+  font-size: .85rem !important;
+  font-weight: 600 !important;
+}
+
+body.cs-admin .section-label,
+body.cs-admin .answer small,
+body.cs-admin .summary-box small,
+body.cs-admin .editor-grid label,
+body.cs-admin .invoice-form label,
+body.cs-admin .setting-meta strong,
+body.cs-admin .template-meta strong,
+body.cs-admin .funnel-label {
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body.cs-admin .section-label,
+body.cs-admin .answer small,
+body.cs-admin .summary-box small,
+body.cs-admin .editor-grid label {
+  color: var(--cs-neutral-600, #6d6672) !important;
+  font-size: .75rem !important;
+}
+
+body.cs-admin .linkish,
+body.cs-admin .invoice-links a,
+body.cs-admin .settings-link {
+  color: var(--cs-purple-700, #54218a) !important;
+  font-weight: 600 !important;
+}
+
+body.cs-admin .template-grid { gap: 10px !important; }
+body.cs-admin .template-card { overflow: hidden !important; }
+body.cs-admin .template-preview {
+  height: 104px !important;
+  position: relative !important;
+  border-bottom: 1px solid var(--cs-border-subtle, #ebe8ed) !important;
+}
+body.cs-admin .template-preview::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 19px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--cs-purple-100, #eee6f6);
+}
+body.cs-admin .template-preview::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 18px !important;
+  right: 42% !important;
+  top: 42px !important;
+  bottom: 18px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: var(--cs-purple-50, #f7f3fa) !important;
+}
+body.cs-admin .template-preview.pro::before { background: var(--cs-neutral-200, #e2dee5) !important; }
+body.cs-admin .template-preview.wellness::before { background: var(--cs-gold-100, #fff3c7) !important; }
+
+body.cs-admin .settings-grid { gap: 10px !important; }
+body.cs-admin .setting { padding: 17px 18px !important; }
+body.cs-admin .setting p { color: var(--cs-neutral-600, #6d6672) !important; }
+
+body.cs-admin .customer-hero,
+body.cs-admin .detail-head,
+body.cs-admin .surface-head {
+  border-bottom-color: var(--cs-border-subtle, #ebe8ed) !important;
+}
+body.cs-admin .customer-hero h2,
+body.cs-admin .detail-head h3 {
+  color: var(--cs-neutral-950, #18151b) !important;
+  font-weight: 700 !important;
+}
+
+body.cs-admin .progress-dot { background: var(--cs-neutral-300, #cbc6ce) !important; }
+body.cs-admin .progress-dot.active { background: var(--cs-gold-500, #f0b719) !important; }
+body.cs-admin .progress-dot.done { background: var(--cs-success-700, #17603a) !important; }
+
+body.cs-admin .dot { background: var(--cs-purple-600, #6b2cae) !important; box-shadow: 0 0 0 4px var(--cs-purple-50, #f7f3fa) !important; }
+body.cs-admin .rail::before { background: var(--cs-border, #e2dee5) !important; }
+
+@media (max-width: 900px) {
+  body.cs-admin .site-overview,
+  body.cs-admin .settings-grid,
+  body.cs-admin .analytics-grid,
+  body.cs-admin .standard { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 700px) {
+  body.cs-admin .flow { grid-template-columns: repeat(7, minmax(116px, 1fr)) !important; overflow-x: auto !important; padding-bottom: 4px !important; }
+  body.cs-admin .template-preview { height: 88px !important; }
+}

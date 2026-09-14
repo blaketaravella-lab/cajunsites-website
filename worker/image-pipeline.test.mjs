@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {resolveImagePolicy} from './image-pipeline/policy-resolver.js';
-import {buildImageBrief} from './image-pipeline/ai-image-pipeline.js';
+import {buildImageBrief,applyAIImages} from './image-pipeline/ai-image-pipeline.js';
 
 const sidelines={id:1,business_name:'Sidelines Barbershop',category:'Barbershop',research_json:JSON.stringify({vertical:'Automotive Repair',identity_confidence:'high',services:[{name:'Engine Repair',confidence:'high'}],design_profile:{image_theme:'mechanic garage engines',mood:'bold'}}),enrichment_provenance_json:JSON.stringify({category:{origin:'manual'}})};
 const sidelinesPolicy=resolveImagePolicy(sidelines);
@@ -27,6 +27,11 @@ const generic=resolveImagePolicy(restaurant);
 assert.match(generic.policy_id,/^general\./,'Unmodeled specialties must receive a strict generic policy rather than bypass QA.');
 assert.ok(generic.allowed_image_subjects.some(x=>/cafe|restaurant/i.test(x)),'Generic policy must retain business-specific visual cues.');
 
+const repairedHtml=applyAIImages('<!doctype html><html><head></head><body><div style="background-image:url(https://old.example/hero.jpg)"></div></body></html>',{hero:'https://old.example/hero.jpg',secondary:'https://old.example/secondary.jpg'},{policy_id:'general.restaurant',hero:{asset_path:'/assets/hero.webp'},secondary:{asset_path:'/assets/secondary.webp'}});
+assert.match(repairedHtml,/\/assets\/hero\.webp/,'Applied concept HTML must reference the local hero asset.');
+assert.match(repairedHtml,/\/assets\/secondary\.webp/,'Applied concept HTML must reference the local secondary asset even when the renderer omits its legacy source URL.');
+assert.match(repairedHtml,/rel="preload" as="image" href="\/assets\/secondary\.webp"/,'Missing optional image references must be repaired before deployment verification.');
+
 const pipeline=fs.readFileSync('worker/image-pipeline/ai-image-pipeline.js','utf8');
 const provider=fs.readFileSync('worker/providers/image-generation.js','utf8');
 const concept=fs.readFileSync('worker/concept-factory.js','utf8');
@@ -43,6 +48,7 @@ assert.match(pipeline,/evaluateImageAsset/,'Visual QA must run through the provi
 assert.match(pipeline,/provider_usage_events/,'Image provider usage must be observable.');
 assert.match(pipeline,/\/assets\/hero\.webp/,'Hero must use a stable deployment-local asset path.');
 assert.match(pipeline,/\/assets\/secondary\.webp/,'Secondary must use a stable deployment-local asset path.');
+assert.match(pipeline,/ensureLocalAssetReferences/,'Concept packaging must repair missing local image references before verification.');
 assert.doesNotMatch(pipeline,/IMAGE_ASSETS|serveImageAsset|storage_key|public_url/,'Image pipeline must not depend on R2 or a separate public image service.');
 assert.match(pipeline,/qaResult\?\.approved/,'QA approval must be persisted.');
 assert.match(concept,/generateApprovedConceptImages\(env,p,buildId\)/,'Concept builds must bind image metadata to the build ID.');
