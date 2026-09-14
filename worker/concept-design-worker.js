@@ -2,9 +2,12 @@ import appWorker from './stale-build-recovery.js';
 import staticBuildWorker from './concept-factory-v2.js';
 import { resolveDesignSpec, designSpecSummary } from './design-intelligence.js';
 const BUILD=/^\/api\/admin\/prospects\/(\d+)\/build-concept$/;
+const PREVIEW=/^\/api\/admin\/prospects\/(\d+)\/concept-preview$/;
+const DESIGN_CHAT=/^\/api\/admin\/design-chat\/(\d+)$/;
 const json=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 const ACTIVE=['Preparing','Generating Images','Packaging','Deploying','Verifying','Activating','Committing'];
 function parse(v,f={}){try{return v?JSON.parse(v):f}catch{return f}}
+function vq(env){const p=new URLSearchParams();if(env.VERCEL_TEAM_ID)p.set('teamId',env.VERCEL_TEAM_ID);return p.toString()?`?${p}`:''}
 async function ensure(env){
   if(!env.DB)return;
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS concept_builds (
@@ -60,6 +63,35 @@ async function ensure(env){
     `ALTER TABLE concept_builds ADD COLUMN design_spec_version TEXT`
   ]){try{await env.DB.prepare(sql).run()}catch(e){if(!/duplicate column|already exists/i.test(String(e?.message||e)))throw e}}
 }
+async function currentUser(request,env,context){const headers=new Headers(),cookie=request.headers.get('cookie');if(cookie)headers.set('cookie',cookie);const r=await appWorker.fetch(new Request(new URL('/api/admin/me',request.url),{method:'GET',headers}),env,context);if(!r.ok)return null;return (await r.json().catch(()=>null))?.user||null}
+async function exactConceptPreview(request,env,context,id){
+  if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503);
+  const user=await currentUser(request,env,context);if(!user)return json({ok:false,error:'Authentication required.'},401);
+  const p=await env.DB.prepare('SELECT id,business_name,concept_state,concept_deployment_id FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  if(!p)return json({ok:false,error:'Prospect not found.'},404);
+  const deploymentId=String(p.concept_deployment_id||'').trim();
+  if(!deploymentId)return json({ok:false,error:'This prospect does not have a completed concept deployment yet.'},410);
+  if(!env.VERCEL_API_TOKEN)return json({ok:false,error:'Vercel preview access is not configured.'},503);
+  const r=await fetch(`https://api.vercel.com/v13/deployments/${encodeURIComponent(deploymentId)}${vq(env)}`,{headers:{Authorization:`Bearer ${env.VERCEL_API_TOKEN}`,'Content-Type':'application/json'}});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)return json({ok:false,error:d?.error?.message||d?.message||`Could not resolve this prospect deployment (${r.status}).`},502);
+  const host=String(d?.url||'').replace(/^https?:\/\//,'').replace(/\/$/,'');
+  if(!host)return json({ok:false,error:'The stored prospect deployment does not have a preview URL.'},502);
+  return new Response(null,{status:302,headers:{location:`https://${host}`,'cache-control':'no-store, no-cache, must-revalidate','x-cajunsites-prospect-id':String(id),'x-cajunsites-deployment-id':deploymentId}});
+}
+async function designChatWithExactPreview(request,env,context,id){
+  const response=await appWorker.fetch(request,env,context);
+  if(!response.ok||!env.DB||!String(response.headers.get('content-type')||'').includes('application/json'))return response;
+  const payload=await response.clone().json().catch(()=>null);if(!payload?.prospect||Number(payload.prospect.id)!==id)return response;
+  const p=await env.DB.prepare('SELECT concept_deployment_id,concept_build_id,concept_state FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  const deploymentId=String(p?.concept_deployment_id||'').trim();
+  payload.prospect.concept_deployment_id=deploymentId||null;
+  payload.prospect.concept_build_id=p?.concept_build_id||null;
+  payload.prospect.concept_state=p?.concept_state||payload.prospect.concept_state||'Not Built';
+  payload.prospect.concept_url=deploymentId?`${new URL(request.url).origin}/api/admin/prospects/${id}/concept-preview`:null;
+  payload.prospect.public_concept_url=null;
+  return new Response(JSON.stringify(payload),{status:response.status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
+}
 async function prepare(env,id){await ensure(env);const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p)throw new Error('Prospect not found.');const r=parse(p.research_json,{}),visual={layout:r?.design_profile?.layout,headline:r?.design_profile?.headline},spec=resolveDesignSpec(p,visual);const profile={...(r.design_profile||{}),headline:spec.headline||r?.design_profile?.headline,cta:spec.cta_strategy?.[0]||r?.design_profile?.cta,sections:spec.section_sequence,process:spec.process?.length?spec.process:r?.design_profile?.process,image_theme:spec.image_theme||r?.design_profile?.image_theme,layout:spec.hero,objective:spec.objective,mobile_strategy:spec.mobile_strategy,trust_strategy:spec.trust_strategy,services_presentation:spec.services_presentation,content_density:spec.content_density,imagery_strategy:spec.imagery_strategy,section_sequence:spec.section_sequence,cta_strategy:spec.cta_strategy,personality:spec.personality};const next={...r,design_profile:profile,design_spec:spec};await env.DB.prepare(`UPDATE prospects SET research_json=?,design_spec_json=?,design_spec_version='1.0',design_spec_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(JSON.stringify(next),JSON.stringify(spec),id).run();try{await env.DB.prepare(`INSERT INTO admin_activity (customer_id,event_type,description,metadata_json,created_at) VALUES (NULL,'design_intelligence',?,?,CURRENT_TIMESTAMP)`).bind(`Resolved Concept Build design strategy for ${p.business_name}`,JSON.stringify({prospect_id:id,design_spec:spec,summary:designSpecSummary(spec)})).run()}catch{}return spec}
 async function buildGate(env,id){
   const p=await env.DB.prepare('SELECT concept_state,concept_build_id,concept_url FROM prospects WHERE id=? LIMIT 1').bind(id).first();
@@ -72,4 +104,11 @@ async function buildGate(env,id){
   if(b?.build_id&&ACTIVE.includes(b.status))await env.DB.prepare(`UPDATE concept_builds SET status='Failed',completed_at=CURRENT_TIMESTAMP,error_stage='Interrupted',error_message=? WHERE build_id=?`).bind(message,b.build_id).run().catch(()=>{});
   return null;
 }
-export default{async fetch(request,env,context){if(env.DB){try{await ensure(env)}catch(e){console.error('Concept schema compatibility bootstrap failed',e)}}const url=new URL(request.url),m=url.pathname.match(BUILD);if(!(m&&request.method==='POST'&&env.DB))return appWorker.fetch(request,env,context);const id=Number(m[1]);const gate=await buildGate(env,id);if(gate?.blocked)return json({ok:false,error:`A concept build is already in progress (${gate.status}).`,build_id:gate.build_id,error_stage:gate.status,in_progress:true},409);let spec;try{spec=await prepare(env,id)}catch(e){return json({ok:false,error:`Design strategy failed: ${String(e?.message||e)}`},500)}const response=await staticBuildWorker.fetch(request,env,context);if(response.ok){try{const payload=await response.clone().json();if(payload?.build_id)await env.DB.prepare(`UPDATE concept_builds SET design_spec_json=?,design_spec_version='1.0' WHERE build_id=?`).bind(JSON.stringify(spec),payload.build_id).run()}catch{}}return response}};
+export default{async fetch(request,env,context){
+  if(env.DB){try{await ensure(env)}catch(e){console.error('Concept schema compatibility bootstrap failed',e)}}
+  const url=new URL(request.url),preview=url.pathname.match(PREVIEW),chat=url.pathname.match(DESIGN_CHAT),m=url.pathname.match(BUILD);
+  if(preview&&request.method==='GET')return exactConceptPreview(request,env,context,Number(preview[1]));
+  if(chat&&request.method==='GET')return designChatWithExactPreview(request,env,context,Number(chat[1]));
+  if(!(m&&request.method==='POST'&&env.DB))return appWorker.fetch(request,env,context);
+  const id=Number(m[1]);const gate=await buildGate(env,id);if(gate?.blocked)return json({ok:false,error:`A concept build is already in progress (${gate.status}).`,build_id:gate.build_id,error_stage:gate.status,in_progress:true},409);let spec;try{spec=await prepare(env,id)}catch(e){return json({ok:false,error:`Design strategy failed: ${String(e?.message||e)}`},500)}const response=await staticBuildWorker.fetch(request,env,context);if(response.ok){try{const payload=await response.clone().json();if(payload?.build_id)await env.DB.prepare(`UPDATE concept_builds SET design_spec_json=?,design_spec_version='1.0' WHERE build_id=?`).bind(JSON.stringify(spec),payload.build_id).run()}catch{}}return response
+}};
