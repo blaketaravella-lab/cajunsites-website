@@ -76,8 +76,8 @@ async function enrichFromStoredResearch(env,id,before=null){
   await env.DB.prepare(`UPDATE prospects SET ${assignments.join(',')} WHERE id=?`).bind(...values).run();
 }
 
-async function usage(env,{prospectId,provider,operation,cacheHit=false,durationMs=null,usageData=null}){try{await env.DB.prepare(`INSERT INTO provider_usage_events (prospect_id,provider,operation,cache_hit,duration_ms,request_count,usage_json,created_at) VALUES (?,?,?,?,?,1,?,CURRENT_TIMESTAMP)`).bind(prospectId,provider,operation,cacheHit?1:0,durationMs,usageData?JSON.stringify(usageData):null).run()}catch{}}
-async function setJob(env,id,status,stage,error=null){try{await env.DB.prepare(`INSERT INTO platform_jobs (job_key,prospect_id,job_type,status,stage,attempts,last_error,started_at,completed_at,created_at,updated_at) VALUES (?,?,'prospect_automation',?,?,1,?,CASE WHEN ?='Running' THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ? IN ('Complete','Failed') THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(job_key) DO UPDATE SET status=excluded.status,stage=excluded.stage,last_error=excluded.last_error,attempts=CASE WHEN excluded.status='Running' THEN platform_jobs.attempts+1 ELSE platform_jobs.attempts END,started_at=CASE WHEN excluded.status='Running' AND platform_jobs.started_at IS NULL THEN CURRENT_TIMESTAMP ELSE platform_jobs.started_at END,completed_at=CASE WHEN excluded.status IN ('Complete','Failed') THEN CURRENT_TIMESTAMP ELSE platform_jobs.completed_at END,updated_at=CURRENT_TIMESTAMP`).bind(`automation:${id}`,id,status,stage,error,status,status).run()}catch{}}
+async function usage(env,{tenantId=1,prospectId,provider,operation,cacheHit=false,durationMs=null,usageData=null}){try{await env.DB.prepare(`INSERT INTO provider_usage_events (tenant_id,prospect_id,provider,operation,cache_hit,duration_ms,request_count,usage_json,created_at) VALUES (?,?,?,?,?,?,1,?,CURRENT_TIMESTAMP)`).bind(tenantId,prospectId,provider,operation,cacheHit?1:0,durationMs,usageData?JSON.stringify(usageData):null).run()}catch{}}
+async function setJob(env,tenantId,id,status,stage,error=null){try{await env.DB.prepare(`INSERT INTO platform_jobs (tenant_id,job_key,prospect_id,job_type,status,stage,attempts,last_error,started_at,completed_at,created_at,updated_at) VALUES (?,?,?,'prospect_automation',?,?,1,?,CASE WHEN ?='Running' THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ? IN ('Complete','Failed') THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(job_key) DO UPDATE SET status=excluded.status,stage=excluded.stage,last_error=excluded.last_error,attempts=CASE WHEN excluded.status='Running' THEN platform_jobs.attempts+1 ELSE platform_jobs.attempts END,started_at=CASE WHEN excluded.status='Running' AND platform_jobs.started_at IS NULL THEN CURRENT_TIMESTAMP ELSE platform_jobs.started_at END,completed_at=CASE WHEN excluded.status IN ('Complete','Failed') THEN CURRENT_TIMESTAMP ELSE platform_jobs.completed_at END,updated_at=CURRENT_TIMESTAMP`).bind(tenantId,`tenant:${tenantId}:automation:${id}`,id,status,stage,error,status,status).run()}catch{}}
 
 async function loadCachedResearch(env,p){
   try{const key=await identityCacheKey(p),row=await env.DB.prepare('SELECT payload_json,expires_at FROM research_cache WHERE cache_key=? AND expires_at>CURRENT_TIMESTAMP LIMIT 1').bind(key).first();return row?{key,research:parseJson(row.payload_json,null),expires_at:row.expires_at}:null}catch{return null}
@@ -89,7 +89,7 @@ async function applyCachedResearch(env,p,cached){
   if(!cached?.research)return false;
   await env.DB.prepare(`UPDATE prospects SET research_json=?,research_status='Complete',researched_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(JSON.stringify(cached.research),p.id).run();
   await enrichFromStoredResearch(env,p.id,protectedSnapshot(p));
-  await usage(env,{prospectId:p.id,provider:'research_cache',operation:'business_research',cacheHit:true,usageData:{expires_at:cached.expires_at}});
+  await usage(env,{tenantId:p.tenant_id,prospectId:p.id,provider:'research_cache',operation:'business_research',cacheHit:true,usageData:{expires_at:cached.expires_at}});
   return true;
 }
 
@@ -120,7 +120,7 @@ async function analyzePhotoInspiration(env,p,photoUris){
   return normalizeVisualInspiration(parseJsonText(responseText(data)),photoUris.length);
 }
 
-async function refreshVisualInspiration(env,id,{force=false}={}){
+async function refreshVisualInspiration(env,tenantId,id,{force=false}={}){
   if(!env.DB||!env.OPENAI_API_KEY)return null;
   const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p)return null;
   if(!force&&isFresh(p.visual_inspiration_at,SOURCE_TTLS.visual_inspiration_days))return parseJson(p.visual_inspiration_json,null);
@@ -134,7 +134,7 @@ async function refreshVisualInspiration(env,id,{force=false}={}){
   const directives=parseJson(p.design_directives_json,null);if(directives&&typeof directives==='object'){for(const key of DESIGN_PROFILE_KEYS){if(directives[key]!==undefined)profile[key]=directives[key]}}
   const updatedResearch={...research,design_profile:profile,visual_inspiration:inspiration,design_profile_origin:directives?'design_studio':research.design_profile_origin};
   await env.DB.prepare('UPDATE prospects SET research_json=?,visual_inspiration_json=?,visual_inspiration_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(JSON.stringify(updatedResearch),JSON.stringify(inspiration),id).run();
-  await usage(env,{prospectId:id,provider:'google_places',operation:'visual_inspiration',durationMs:Date.now()-started,usageData:{photo_count:photoUris.length,reason:plan.reason}});
+  await usage(env,{tenantId,prospectId:id,provider:'google_places',operation:'visual_inspiration',durationMs:Date.now()-started,usageData:{photo_count:photoUris.length,reason:plan.reason}});
   return inspiration;
 }
 
@@ -145,24 +145,33 @@ async function ensureResearch(worker,request,env,context,id){
   const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p||p.research_status==='Complete')return true;
   const cached=await loadCachedResearch(env,p);if(cached&&await applyCachedResearch(env,p,cached))return true;
   const started=Date.now(),researchResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/research`),env,context);
-  if(researchResponse.ok){const refreshed=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(refreshed)await storeResearchCache(env,refreshed);await usage(env,{prospectId:id,provider:'openai',operation:'business_research',durationMs:Date.now()-started});return true}
+  if(researchResponse.ok){const refreshed=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(refreshed)await storeResearchCache(env,refreshed);await usage(env,{tenantId,prospectId:id,provider:'openai',operation:'business_research',durationMs:Date.now()-started});return true}
   return false;
 }
 
-async function prepareConceptBuild(worker,request,env,context,id){
-  try{await ensureResearch(worker,request,env,context,id);await refreshVisualInspiration(env,id)}catch(error){console.warn('Optional visual enrichment skipped',{prospectId:id,error:clean(error?.message||error,500)})}
+async function prepareConceptBuild(worker,request,env,context,tenantId,id){
+  try{await ensureResearch(worker,request,env,context,id);await refreshVisualInspiration(env,tenantId,id)}catch(error){console.warn('Optional visual enrichment skipped',{prospectId:id,error:clean(error?.message||error,500)})}
 }
 
-async function queueAutoResearchAndBuild(worker,request,env,context,id){
+async function queueAutoResearchAndBuild(worker,request,env,context,tenantId,id){
   await ensureSchema(env);
-  await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
-  await setJob(env,id,'Queued','Browser Research & Build');
+  await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?").bind(tenantId,id).run();
+  await setJob(env,tenantId,id,'Queued','Browser Research & Build');
 }
 
 const worker={
   async fetch(request,env,context){
     const url=new URL(request.url);if(!env.DB)return prospectCleanupWorker.fetch(request,env,context);await ensureSchema(env);
     let data=null,before=null,id=null;
+    let tenantId=null;
+    if(url.pathname.startsWith('/api/admin/prospects')){
+      const headers=new Headers(),cookie=request.headers.get('cookie');if(cookie)headers.set('cookie',cookie);
+      const me=await prospectCleanupWorker.fetch(new Request(new URL('/api/admin/me',request.url),{method:'GET',headers}),env,context);
+      if(!me.ok)return me;const mePayload=await me.json().catch(()=>null);tenantId=Number(mePayload?.user?.current_tenant_id);
+      if(!Number.isInteger(tenantId)||tenantId<=0)return json({ok:false,error:'No active tenant context was found.'},403);
+      const routeId=Number((url.pathname.match(/^\/api\/admin\/prospects\/(\d+)/)||[])[1]);
+      if(routeId){const owned=await env.DB.prepare('SELECT id FROM prospects WHERE tenant_id=? AND id=? LIMIT 1').bind(tenantId,routeId).first();if(!owned)return json({ok:false,error:'Prospect not found.'},404)}
+    }
     const researchMatch=url.pathname.match(RESEARCH_MUTATION_RE),prospectMatch=url.pathname.match(PROSPECT_MUTATION_RE);
     const isCreate=url.pathname==='/api/admin/prospects'&&request.method==='POST';
     const isManualUpdate=prospectMatch&&request.method==='PATCH';
@@ -171,10 +180,10 @@ const worker={
     if(isCreate||isManualUpdate)data=await readJsonClone(request);
     if(isManualUpdate)id=Number(prospectMatch[1]);
     if(isResearchMutation){id=Number(researchMatch[1]);const row=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(row)before=protectedSnapshot(row)}
-    if(isConceptBuild){id=Number(researchMatch[1]);await prepareConceptBuild(worker,request,env,context,id)}
+    if(isConceptBuild){id=Number(researchMatch[1]);await prepareConceptBuild(worker,request,env,context,tenantId,id)}
     const response=await prospectCleanupWorker.fetch(request,env,context);if(!response.ok)return response;
     try{
-      if(isCreate){const payload=await response.clone().json();if(payload?.id){id=Number(payload.id);await markManualFields(env,id,data);await queueAutoResearchAndBuild(worker,request,env,context,id)}}
+      if(isCreate){const payload=await response.clone().json();if(payload?.id){id=Number(payload.id);await markManualFields(env,id,data);await queueAutoResearchAndBuild(worker,request,env,context,tenantId,id)}}
       if(isManualUpdate)await markManualFields(env,id,data);
       if(isResearchMutation){await enrichFromStoredResearch(env,id,before);const row=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(row)await storeResearchCache(env,row)}
     }catch(error){console.error('Prospect enrichment post-processing failed',error)}
