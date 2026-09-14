@@ -45,9 +45,9 @@ async function ensureSchema(env){
   schemaChecked=true;
 }
 
-async function trackUsage(env,prospectId,result,operation,extra={}){
+async function trackUsage(env,prospect,result,operation,extra={}){
   if(!env.DB)return;
-  try{await env.DB.prepare(`INSERT INTO provider_usage_events (prospect_id,provider,operation,model,cache_hit,duration_ms,request_count,usage_json,created_at) VALUES (?,?,?,?,0,?,1,?,CURRENT_TIMESTAMP)`).bind(prospectId,result?.provider||'openai',operation,result?.model||null,result?.duration_ms||null,JSON.stringify({usage:result?.usage||null,...extra})).run()}catch{}
+  try{await env.DB.prepare(`INSERT INTO provider_usage_events (tenant_id,prospect_id,provider,operation,model,cache_hit,duration_ms,request_count,usage_json,created_at) VALUES (?,?,?,?,?,0,?,1,?,CURRENT_TIMESTAMP)`).bind(prospect.tenant_id,prospect.id,result?.provider||'openai',operation,result?.model||null,result?.duration_ms||null,JSON.stringify({usage:result?.usage||null,...extra})).run()}catch{}
 }
 
 function qaSpec(prospect,brief,policy,hasCompanion){
@@ -64,7 +64,7 @@ function qaSpec(prospect,brief,policy,hasCompanion){
 async function qa(env,prospect,brief,generated,policy,companion=null){
   const spec=qaSpec(prospect,brief,policy,Boolean(companion));
   const evaluated=await evaluateImageAsset(env,{prompt:spec.prompt,image:generated,companion:companion?.generated||null});
-  await trackUsage(env,prospect.id,evaluated,'image_qa',{role:brief.role});
+  await trackUsage(env,prospect,evaluated,'image_qa',{role:brief.role});
   const q=evaluated.result,t=spec.thresholds;
   const approved=!q.hard_reject&&num(q.overall_score)>=t.overall_auto_approve&&num(q.business_relevance)>=t.business_relevance_min&&num(q.service_relevance)>=t.service_relevance_min&&num(q.composition)>=t.composition_min&&num(q.realism)>=t.realism_min&&num(q.brand_fit)>=t.brand_fit_min&&num(q.safety)>=t.safety_min&&(!companion||num(q.distinctiveness)>=t.distinctiveness_min);
   return{...q,approved,qa_provider:evaluated.provider,qa_model:evaluated.model,effective_thresholds:t};
@@ -73,13 +73,13 @@ async function qa(env,prospect,brief,generated,policy,companion=null){
 async function record(env,prospect,buildId,brief,generated,attempt,qaResult){
   if(!env.DB)return null;await ensureSchema(env);
   const assetPath=qaResult?.approved?ASSET_PATHS[brief.role]||null:null;
-  const result=await env.DB.prepare(`INSERT INTO concept_images (prospect_id,build_id,image_role,provider,model,prompt,policy_id,policy_version,policy_hash,asset_path,generation_status,qa_status,qa_score,qa_json,attempt_number,representation_class,approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='approved' THEN CURRENT_TIMESTAMP ELSE NULL END)`).bind(prospect.id,buildId,brief.role,generated?.provider||'openai',generated?.model||'unknown',brief.prompt,brief.policy_id,brief.policy_version,shaLike(JSON.stringify({id:brief.policy_id,version:brief.policy_version,mode:brief.policy_mode,expected:brief.expected_subjects,forbidden:brief.forbidden_subjects,identity:brief.identity,image_plan:brief.image_plan})),assetPath,generated?'generated':'failed',qaResult?.approved?'approved':'rejected',Number.isFinite(Number(qaResult?.overall_score))?Number(qaResult.overall_score):null,JSON.stringify(qaResult||{}),attempt,'representative_service',qaResult?.approved?'approved':'rejected').run();
+  const result=await env.DB.prepare(`INSERT INTO concept_images (tenant_id,prospect_id,build_id,image_role,provider,model,prompt,policy_id,policy_version,policy_hash,asset_path,generation_status,qa_status,qa_score,qa_json,attempt_number,representation_class,approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='approved' THEN CURRENT_TIMESTAMP ELSE NULL END)`).bind(prospect.tenant_id,prospect.id,buildId,brief.role,generated?.provider||'openai',generated?.model||'unknown',brief.prompt,brief.policy_id,brief.policy_version,shaLike(JSON.stringify({id:brief.policy_id,version:brief.policy_version,mode:brief.policy_mode,expected:brief.expected_subjects,forbidden:brief.forbidden_subjects,identity:brief.identity,image_plan:brief.image_plan})),assetPath,generated?'generated':'failed',qaResult?.approved?'approved':'rejected',Number.isFinite(Number(qaResult?.overall_score))?Number(qaResult.overall_score):null,JSON.stringify(qaResult||{}),attempt,'representative_service',qaResult?.approved?'approved':'rejected').run();
   return result.meta?.last_row_id||null;
 }
 
-async function promoteFallback(env,imageId,role,qaResult){
+async function promoteFallback(env,tenantId,imageId,role,qaResult){
   if(!env.DB||!imageId)return;
-  await env.DB.prepare(`UPDATE concept_images SET asset_path=?,qa_status='approved',qa_json=?,approved_at=CURRENT_TIMESTAMP WHERE id=?`).bind(ASSET_PATHS[role],JSON.stringify(qaResult),imageId).run();
+  await env.DB.prepare(`UPDATE concept_images SET asset_path=?,qa_status='approved',qa_json=?,approved_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?`).bind(ASSET_PATHS[role],JSON.stringify(qaResult),tenantId,imageId).run();
 }
 
 function safeSecondaryFallback(q,thresholds){
@@ -103,7 +103,7 @@ async function generateRole(env,prospect,buildId,role,policy,companion=null){
     const brief=buildImageBrief(prospect,role,policy,feedback);let generated;
     try{
       generated=await generateImageAsset(env,{prompt:brief.prompt,size:'1536x1024',quality:'medium',format:'webp'});
-      await trackUsage(env,prospect.id,generated,'image_generation',{role,attempt,policy_mode:policy?.policy_mode||null,image_plan_source:brief.image_plan?.source||null});
+      await trackUsage(env,prospect,generated,'image_generation',{role,attempt,policy_mode:policy?.policy_mode||null,image_plan_source:brief.image_plan?.source||null});
       const q=await qa(env,prospect,brief,generated,policy,companion);
       lastQa=q;
       const imageId=await record(env,prospect,buildId,brief,generated,attempt,q);
@@ -118,7 +118,7 @@ async function generateRole(env,prospect,buildId,role,policy,companion=null){
   }
   if(role==='secondary'&&bestSoft){
     const qaResult={...bestSoft.qa,approved:true,degraded_fallback:true,original_approved:false,notes:`Accepted as a safe secondary fallback after retry exhaustion. ${clean(bestSoft.qa.notes,500)}`};
-    await promoteFallback(env,bestSoft.image_id,role,qaResult);
+    await promoteFallback(env,prospect.tenant_id,bestSoft.image_id,role,qaResult);
     return{...bestSoft,qa:qaResult,fallback:true,fallback_reason:'secondary_soft_threshold'};
   }
   const detail=lastQa?rejectionSummary(lastQa):lastError||'No usable image result was produced.';
@@ -163,8 +163,8 @@ export function applyAIImages(html,system,selection){
   return out;
 }
 
-export async function finalizeConceptImageDeployment(env,buildId,deploymentId){
+export async function finalizeConceptImageDeployment(env,tenantId,buildId,deploymentId){
   if(!env.DB||!buildId||!deploymentId)return;
   await ensureSchema(env);
-  await env.DB.prepare(`UPDATE concept_images SET deployment_id=?,deployed_at=CURRENT_TIMESTAMP WHERE build_id=? AND qa_status='approved' AND asset_path IS NOT NULL`).bind(deploymentId,buildId).run();
+  await env.DB.prepare(`UPDATE concept_images SET deployment_id=?,deployed_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND build_id=? AND qa_status='approved' AND asset_path IS NOT NULL`).bind(deploymentId,tenantId,buildId).run();
 }
