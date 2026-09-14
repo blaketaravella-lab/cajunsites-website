@@ -6,6 +6,7 @@ const designChat=fs.readFileSync('worker/design-chat.js','utf8');
 const designStudio=fs.readFileSync('src/pages/admin/design-studio.astro','utf8');
 const hardening=fs.readFileSync('worker/platform-hardening.js','utf8');
 const reliability=fs.readFileSync('worker/reliability-hotfix.js','utf8');
+const staleRecovery=fs.readFileSync('worker/stale-build-recovery.js','utf8');
 const conceptDesign=fs.readFileSync('worker/concept-design-worker.js','utf8');
 const sourceRouter=fs.readFileSync('worker/providers/business-data.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
@@ -22,7 +23,8 @@ const designChatWrapsBilling=wrangler.includes('"main": "./worker/design-chat.js
 const hardeningWrapsDesign=wrangler.includes('"main": "./worker/platform-hardening.js"')&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
 const conceptDesignWrapsHardening=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
 const conceptDesignWrapsReliability=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './reliability-hotfix.js'")&&reliability.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
-must(enrichmentIsTopLevel||billingWrapsEnrichment||designChatWrapsBilling||hardeningWrapsDesign||conceptDesignWrapsHardening||conceptDesignWrapsReliability,'Prospect enrichment must remain in the top-level Worker chain.');
+const conceptDesignWrapsStaleRecovery=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './stale-build-recovery.js'")&&staleRecovery.includes("import appWorker from './reliability-hotfix.js'")&&reliability.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
+must(enrichmentIsTopLevel||billingWrapsEnrichment||designChatWrapsBilling||hardeningWrapsDesign||conceptDesignWrapsHardening||conceptDesignWrapsReliability||conceptDesignWrapsStaleRecovery,'Prospect enrichment must remain in the top-level Worker chain.');
 must(enrichment.includes("origin:'manual'"),'Manual edits must be recorded in field provenance.');
 must(enrichment.includes("'manual_existing'"),'Legacy non-empty values must be protected from research overwrite.');
 must(enrichment.includes("origin:'research'"),'Research-populated fields must retain research provenance.');
@@ -39,6 +41,7 @@ must(enrichment.includes('context?.waitUntil'),'Automatic prospect workflow must
 must(enrichment.includes('places.googleapis.com/v1/places:searchText'),'Google Places enrichment must remain available when confidence routing calls for it.');
 must(enrichment.includes('skipHttpRedirect=true'),'Google Place photos must be transient analysis inputs only.');
 must(enrichment.includes('Do not copy, reproduce, trace, crop, embed, or otherwise reuse any source photo'),'Visual analysis must prohibit copying source photos.');
+must(staleRecovery.includes("p.concept_state='Building'")&&staleRecovery.includes('STALE_MINUTES=15'),'Interrupted automatic concept builds must self-heal instead of remaining Building forever.');
 
 must(designChat.includes('a tightly constrained website-design assistant'),'Design Studio must use an explicit website-design-only system boundary.');
 must(designChat.includes('You have no tools, no code execution, no filesystem, no database access'),'Design Studio prompt must deny tool, code, filesystem, and database capabilities.');
@@ -64,4 +67,4 @@ must(hardening.includes('platform_jobs'),'Long-running operations must expose jo
 must(hardeningMigration.includes('research_cache')&&hardeningMigration.includes('billing_snapshots')&&hardeningMigration.includes('provider_usage_events'),'Platform hardening must have a canonical migration.');
 must(!wrangler.includes('IMAGE_ASSETS')&&!wrangler.includes('r2_buckets'),'Concept AI imagery must not depend on Cloudflare R2.');
 
-console.log('Prospect enrichment, Design Studio, and platform hardening invariants passed.');
+console.log('Prospect enrichment, Design Studio, platform hardening, and stale build recovery invariants passed.');
