@@ -38,8 +38,12 @@ assert.match(conceptWorker, /import appWorker from '\.\/stale-build-recovery\.js
 assert.match(conceptWorker, /import staticBuildWorker from '\.\/concept-factory-v2\.js'/,'All concept builds must use the canonical atomic preview deployer.');
 assert.match(conceptWorker, /concept-preview/,'Design Studio must use a prospect-specific exact deployment preview route.');
 assert.match(conceptWorker, /concept_deployment_id/,'Design Studio preview selection must bind to the selected prospect deployment ID.');
-assert.match(conceptWorker, /x-cajunsites-prospect-id/,'Exact preview redirects must retain the selected prospect identity for diagnostics.');
+assert.match(conceptWorker, /x-cajunsites-prospect-id/,'Exact preview responses must retain the selected prospect identity for diagnostics.');
 assert.match(conceptWorker, /designChatWithExactPreview/,'Design chat responses must be rewritten to the exact selected prospect preview.');
+assert.match(conceptWorker, /\/v6\/deployments\/\$\{encodeURIComponent\(deploymentId\)\}\/files/,'Design Studio previews must read the selected deployment file tree through Vercel API.');
+assert.match(conceptWorker, /deploymentFileBytes/,'Design Studio previews must proxy exact stored deployment bytes instead of iframeing a Vercel deployment host.');
+assert.match(conceptWorker, /frame-ancestors 'self'/,'Same-origin Design Studio preview HTML must explicitly permit embedding only by CajunSites itself.');
+assert.doesNotMatch(conceptWorker, /location:`https:\/\/\$\{host\}`/,'Design Studio must not redirect the iframe to a Vercel host that can refuse framing.');
 assert.match(staleRecovery, /STALE_MINUTES=15/,'Interrupted concept builds must self-heal instead of staying Building forever.');
 
 assert.match(conceptFactory, /verifySourceFiles/,'Concept preview deployments must verify exact stored source files before activation.');
