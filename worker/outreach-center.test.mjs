@@ -11,6 +11,8 @@ assert.match(page,/Approved call direction/,'The calling workspace must show the
 assert.match(page,/outreach-call/,'The workspace must record structured call results.');
 assert.match(page,/outreach-email/,'The workspace must expose human-approved concept email.');
 assert.match(api,/OUTREACH_POSTAL_ADDRESS must be configured/,'Commercial email must fail closed without a postal address.');
+assert.match(api,/OUTREACH_EMAIL_ENABLED!=='true'/,'The backend must reject prospect email until it is explicitly enabled.');
+assert.match(page,/outreachData\.email_enabled/,'The email interface must remain hidden until the backend enables it.');
 assert.match(api,/List-Unsubscribe-Post/,'Concept email must support one-click unsubscribe.');
 assert.match(api,/do_not_contact/,'Outreach must enforce suppression state.');
 assert.match(api,/Publish the concept before sending it/,'Email must require a published concept.');

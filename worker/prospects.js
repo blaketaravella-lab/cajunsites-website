@@ -71,7 +71,7 @@ async function listOutreach(env){
   await ensureSchema(env);
   const prospects=await env.DB.prepare(`SELECT * FROM prospects WHERE customer_id IS NULL ORDER BY CASE WHEN next_follow_up IS NOT NULL AND date(next_follow_up)<=date('now') THEN 0 WHEN concept_url IS NOT NULL AND COALESCE(call_attempts,0)=0 THEN 1 ELSE 2 END,COALESCE(next_follow_up,'9999-12-31'),id DESC`).all();
   const events=await env.DB.prepare(`SELECT e.*,p.business_name FROM prospect_outreach_events e JOIN prospects p ON p.id=e.prospect_id ORDER BY e.id DESC LIMIT 250`).all();
-  return json({ok:true,prospects:prospects.results||[],events:events.results||[],call_results:CALL_RESULTS});
+  return json({ok:true,prospects:prospects.results||[],events:events.results||[],call_results:CALL_RESULTS,email_enabled:env.OUTREACH_EMAIL_ENABLED==='true'&&Boolean(env.RESEND_API_KEY)&&Boolean(clean(env.OUTREACH_POSTAL_ADDRESS,500))});
 }
 
 function callOutcome(result,existing){
@@ -100,6 +100,7 @@ function emailAddressValid(value){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value
 function htmlEscape(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function sendConceptEmail(request,env,user,id){
   if(user.role==='read_only')return json({ok:false,error:'Your role is read only.'},403);
+  if(env.OUTREACH_EMAIL_ENABLED!=='true')return json({ok:false,error:'Prospect email outreach is currently disabled.'},403);
   if(!env.RESEND_API_KEY)return json({ok:false,error:'Resend is not configured.'},503);
   if(!clean(env.OUTREACH_POSTAL_ADDRESS,500))return json({ok:false,error:'OUTREACH_POSTAL_ADDRESS must be configured before commercial outreach can be sent.'},503);
   const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? AND customer_id IS NULL LIMIT 1').bind(id).first();
