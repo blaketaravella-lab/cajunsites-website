@@ -15,7 +15,7 @@ export async function listProspects(env, tenant, limit = 50, cursor = null) {
   const pageSize = Math.min(100, Math.max(1, Number(limit) || 50));
   const after = Math.max(0, Number(cursor) || 0);
   const result = await env.DB.prepare(`
-    SELECT external_id,business_name,category,city,state,research_status,concept_state,updated_at
+    SELECT id,external_id,business_name,category,city,state,research_status,concept_state,updated_at
     FROM prospects
     WHERE tenant_id=? AND id>?
     ORDER BY id
@@ -23,11 +23,10 @@ export async function listProspects(env, tenant, limit = 50, cursor = null) {
   `).bind(tenant.tenantId, after, pageSize + 1).all();
   const rows = result.results || [];
   const hasMore = rows.length > pageSize;
-  const items = rows.slice(0, pageSize);
-  return {
-    items,
-    next_cursor: hasMore ? String(items.at(-1)?.id || after) : null,
-  };
+  const pageRows = rows.slice(0, pageSize);
+  const nextCursor = hasMore ? String(pageRows.at(-1)?.id || after) : null;
+  const items = pageRows.map(({ id, ...item }) => item);
+  return { items, next_cursor: nextCursor };
 }
 
 export async function getProspect(env, tenant, externalId) {
