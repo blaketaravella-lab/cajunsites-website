@@ -64,8 +64,8 @@ assert.match(concept,/generateApprovedConceptImages\(env,p,buildId\)/,'Concept b
 assert.match(concept,/\/v2\/files/,'Approved deployment files must be uploaded through the Vercel file API.');
 assert.match(concept,/x-vercel-digest/,'Vercel file uploads must be content-addressed by digest.');
 assert.match(concept,/concept-manifest\.json/,'Each concept deployment must include a manifest.');
-assert.match(concept,/verifyStoredDeployment/,'Concept deployments must verify stored deployment bytes before activation.');
-assert.ok(concept.indexOf('await verifyStoredDeployment')<concept.indexOf('await assignAlias'),'Stored deployment verification must happen before alias activation.');
+assert.match(concept,/verifySourceFiles/,'Concept deployments must verify exact stored deployment bytes before activation.');
+assert.ok(concept.indexOf('await verifySourceFiles')<concept.indexOf('await assignAlias'),'Stored deployment verification must happen before alias activation.');
 assert.match(concept,/verifyLiveAlias/,'The live alias must be verified after activation before the build is committed.');
 assert.ok(concept.indexOf('await assignAlias')<concept.indexOf('await verifyLiveAlias'),'Live alias verification must happen after alias activation.');
 assert.doesNotMatch(concept,/vercelUploadFile\(env,'vercel\.json'/,'Atomic preview deployments must not install a catch-all Vercel rewrite.');
