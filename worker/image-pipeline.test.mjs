@@ -22,12 +22,14 @@ assert.deepEqual(dentalPolicy.verified_service_names,['Dental Cleaning'],'Manual
 assert.ok(dentalPolicy.verified_service_ids.includes('preventive_care'),'Verified cleaning must activate preventive-care overlay.');
 assert.ok(!dentalPolicy.verified_service_ids.includes('implants'),'Research-only implant service must not override manually verified services.');
 
-const restaurant={business_name:'Bayou Cafe',category:'Restaurant',research_json:JSON.stringify({vertical:'Restaurant',services:[{name:'Breakfast',confidence:'high'}],design_profile:{image_theme:'warm neighborhood cafe interior'}})};
-const generic=resolveImagePolicy(restaurant);
-assert.match(generic.policy_id,/^general\./,'Unmodeled specialties must receive a strict generic policy rather than bypass QA.');
-assert.ok(generic.allowed_image_subjects.some(x=>/cafe|restaurant/i.test(x)),'Generic policy must retain business-specific visual cues.');
+const restaurant={business_name:'Anita\'s Smokin Steak Burgers',category:'Restaurant',research_json:JSON.stringify({vertical:'Burger Restaurant',services:[{name:'Steak Burgers',confidence:'high'}],design_profile:{image_theme:'smoked steak burgers on a grill'}})};
+const restaurantPolicy=resolveImagePolicy(restaurant);
+assert.equal(restaurantPolicy.policy_id,'food.restaurant','Restaurant prospects must use the restaurant-specific QA policy.');
+assert.ok(restaurantPolicy.allowed_image_subjects.some(x=>/burger|grill|food/i.test(x)),'Restaurant policy must retain verified food-specific visual cues.');
+assert.ok(restaurantPolicy.thresholds.overall_auto_approve<=80,'Restaurant policy must avoid the overly strict generic threshold that caused repeated valid secondary-image rejection.');
+assert.ok(restaurantPolicy.qa_instructions.specialty_checks.some(x=>/secondary image/i.test(x)),'Restaurant QA must explicitly allow a distinct representative secondary composition.');
 
-const repairedHtml=applyAIImages('<!doctype html><html><head></head><body><div style="background-image:url(https://old.example/hero.jpg)"></div></body></html>',{hero:'https://old.example/hero.jpg',secondary:'https://old.example/secondary.jpg'},{policy_id:'general.restaurant',hero:{asset_path:'/assets/hero.webp'},secondary:{asset_path:'/assets/secondary.webp'}});
+const repairedHtml=applyAIImages('<!doctype html><html><head></head><body><div style="background-image:url(https://old.example/hero.jpg)"></div></body></html>',{hero:'https://old.example/hero.jpg',secondary:'https://old.example/secondary.jpg'},{policy_id:'food.restaurant',hero:{asset_path:'/assets/hero.webp'},secondary:{asset_path:'/assets/secondary.webp'}});
 assert.match(repairedHtml,/\/assets\/hero\.webp/,'Applied concept HTML must reference the local hero asset.');
 assert.match(repairedHtml,/\/assets\/secondary\.webp/,'Applied concept HTML must reference the local secondary asset even when the renderer omits its legacy source URL.');
 assert.match(repairedHtml,/rel="preload" as="image" href="\/assets\/secondary\.webp"/,'Missing optional image references must be repaired before deployment verification.');
