@@ -75,3 +75,21 @@ CREATE TABLE IF NOT EXISTS billing_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_billing_snapshots_status
 ON billing_snapshots(subscription_status, synced_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_prospects_active_stage
+ON prospects(customer_id, stage);
+
+CREATE INDEX IF NOT EXISTS idx_prospects_followup
+ON prospects(customer_id, next_follow_up, stage);
+
+CREATE INDEX IF NOT EXISTS idx_prospects_research_state
+ON prospects(customer_id, research_status);
+
+CREATE INDEX IF NOT EXISTS idx_prospects_concept_state
+ON prospects(customer_id, concept_state);
+
+CREATE INDEX IF NOT EXISTS idx_customers_status_updated
+ON customers(status, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_concept_images_created
+ON concept_images(created_at DESC, prospect_id);
