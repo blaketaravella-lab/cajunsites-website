@@ -52,5 +52,6 @@ must(designChat.includes('design_directives_json')&&designChat.includes('design_
 must(designChat.includes('`/api/admin/prospects/${id}/build-concept`'),'Applying a design may only hand off to the existing concept builder.');
 must(!designChat.includes('/api/admin/users')&&!designChat.includes('/api/admin/settings')&&!designChat.includes('/api/admin/billing'),'Design Studio must not contain mutation paths for protected dashboard domains.');
 must(designMigration.includes('design_chat_messages')&&designMigration.includes('design_directives_json'),'Design Studio must have canonical isolated persistence.');
+must(!wrangler.includes('IMAGE_ASSETS')&&!wrangler.includes('r2_buckets'),'Concept AI imagery must not depend on Cloudflare R2.');
 
 console.log('Prospect enrichment and Design Studio invariants passed.');
