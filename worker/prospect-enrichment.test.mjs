@@ -4,6 +4,7 @@ const enrichment=fs.readFileSync('worker/prospect-enrichment.js','utf8');
 const billing=fs.readFileSync('worker/billing.js','utf8');
 const designChat=fs.readFileSync('worker/design-chat.js','utf8');
 const hardening=fs.readFileSync('worker/platform-hardening.js','utf8');
+const reliability=fs.readFileSync('worker/reliability-hotfix.js','utf8');
 const conceptDesign=fs.readFileSync('worker/concept-design-worker.js','utf8');
 const sourceRouter=fs.readFileSync('worker/providers/business-data.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
@@ -19,7 +20,8 @@ const billingWrapsEnrichment=wrangler.includes('"main": "./worker/billing.js"')&
 const designChatWrapsBilling=wrangler.includes('"main": "./worker/design-chat.js"')&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
 const hardeningWrapsDesign=wrangler.includes('"main": "./worker/platform-hardening.js"')&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
 const conceptDesignWrapsHardening=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
-must(enrichmentIsTopLevel||billingWrapsEnrichment||designChatWrapsBilling||hardeningWrapsDesign||conceptDesignWrapsHardening,'Prospect enrichment must remain in the top-level Worker chain.');
+const conceptDesignWrapsReliability=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './reliability-hotfix.js'")&&reliability.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
+must(enrichmentIsTopLevel||billingWrapsEnrichment||designChatWrapsBilling||hardeningWrapsDesign||conceptDesignWrapsHardening||conceptDesignWrapsReliability,'Prospect enrichment must remain in the top-level Worker chain.');
 must(enrichment.includes("origin:'manual'"),'Manual edits must be recorded in field provenance.');
 must(enrichment.includes("'manual_existing'"),'Legacy non-empty values must be protected from research overwrite.');
 must(enrichment.includes("origin:'research'"),'Research-populated fields must retain research provenance.');

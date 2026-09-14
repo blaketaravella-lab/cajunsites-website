@@ -31,6 +31,7 @@ const pipeline=fs.readFileSync('worker/image-pipeline/ai-image-pipeline.js','utf
 const provider=fs.readFileSync('worker/providers/image-generation.js','utf8');
 const concept=fs.readFileSync('worker/concept-factory.js','utf8');
 const designWorker=fs.readFileSync('worker/concept-design-worker.js','utf8');
+const reliabilityWorker=fs.readFileSync('worker/reliability-hotfix.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const migration=fs.readFileSync('migrations/0013_ai_image_pipeline.sql','utf8');
 assert.match(pipeline,/MAX_ATTEMPTS=3/,'Image generation must cap retries.');
@@ -58,6 +59,6 @@ assert.match(migration,/concept_builds/,'Canonical migration must retain build h
 assert.match(migration,/asset_path/,'Canonical image metadata must store deployment-local asset paths.');
 assert.match(migration,/concept_build_id/,'Prospects must reference their current concept build.');
 assert.doesNotMatch(wrangler,/IMAGE_ASSETS|r2_buckets/,'Worker configuration must not require Cloudflare R2 for concept images.');
-assert.ok(/"main": "\.\/worker\/platform-hardening\.js"/.test(wrangler)||(/"main": "\.\/worker\/concept-design-worker\.js"/.test(wrangler)&&designWorker.includes("import appWorker from './platform-hardening.js'")),'Platform hardening must remain in the top-level Worker chain.');
+assert.ok(/"main": "\.\/worker\/platform-hardening\.js"/.test(wrangler)||(/"main": "\.\/worker\/concept-design-worker\.js"/.test(wrangler)&&((designWorker.includes("import appWorker from './platform-hardening.js'"))||(designWorker.includes("import appWorker from './reliability-hotfix.js'")&&reliabilityWorker.includes("import appWorker from './platform-hardening.js'")))),'Platform hardening must remain in the top-level Worker chain.');
 
 console.log('AI image pipeline invariants passed.');
