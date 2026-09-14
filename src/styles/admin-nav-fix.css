@@ -1,0 +1,79 @@
+/* Sidebar navigation flow hardening.
+   Group labels and links must always occupy their own rows and never overlap. */
+
+body.cs-admin .sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+body.cs-admin .nav-group {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 0 0 auto !important;
+  gap: 3px !important;
+  position: static !important;
+  margin: 0 0 12px !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+body.cs-admin .nav-group + .nav-group {
+  margin-top: 0 !important;
+}
+
+body.cs-admin .nav-group-label {
+  display: block !important;
+  position: static !important;
+  inset: auto !important;
+  float: none !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 18px !important;
+  margin: 0 !important;
+  padding: 7px 10px 4px !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  color: #b9abc3 !important;
+  font-size: .64rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  pointer-events: none !important;
+}
+
+body.cs-admin .nav {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) !important;
+  gap: 2px !important;
+  position: static !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+body.cs-admin .nav a {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+body.cs-admin .nav a > span:last-child {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 900px) {
+  body.cs-admin .nav-group { margin-bottom: 10px !important; }
+  body.cs-admin .nav-group-label { padding-top: 8px !important; }
+}
