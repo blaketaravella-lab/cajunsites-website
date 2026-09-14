@@ -25,9 +25,29 @@ assert.ok(!dentalPolicy.verified_service_ids.includes('implants'),'Research-only
 const restaurant={business_name:'Anita\'s Smokin Steak Burgers',category:'Restaurant',research_json:JSON.stringify({vertical:'Burger Restaurant',services:[{name:'Steak Burgers',confidence:'high'}],design_profile:{image_theme:'smoked steak burgers on a grill'}})};
 const restaurantPolicy=resolveImagePolicy(restaurant);
 assert.equal(restaurantPolicy.policy_id,'food.restaurant','Restaurant prospects must use the restaurant-specific QA policy.');
+assert.equal(restaurantPolicy.policy_mode,'specialized');
 assert.ok(restaurantPolicy.allowed_image_subjects.some(x=>/burger|grill|food/i.test(x)),'Restaurant policy must retain verified food-specific visual cues.');
 assert.ok(restaurantPolicy.thresholds.overall_auto_approve<=80,'Restaurant policy must avoid the overly strict generic threshold that caused repeated valid secondary-image rejection.');
 assert.ok(restaurantPolicy.qa_instructions.specialty_checks.some(x=>/secondary image/i.test(x)),'Restaurant QA must explicitly allow a distinct representative secondary composition.');
+
+const nutrition={business_name:'Best Life Nutrition',category:'Nutrition',research_json:JSON.stringify({vertical:'Nutrition & Wellness',identity_confidence:'high',services:[{name:'Nutrition Coaching',confidence:'high'},{name:'Meal Planning',confidence:'high'}],design_profile:{image_theme:'healthy food and supportive nutrition coaching'}})};
+const nutritionPolicy=resolveImagePolicy(nutrition);
+assert.equal(nutritionPolicy.policy_id,'wellness.nutrition','Nutrition prospects must receive a purpose-built nutrition policy instead of the generic fallback.');
+assert.equal(nutritionPolicy.policy_mode,'specialized');
+assert.ok(nutritionPolicy.allowed_image_subjects.some(x=>/nutrition|meal|healthy|food/i.test(x)),'Nutrition policy must provide safe business-relevant visual subjects.');
+assert.ok(nutritionPolicy.forbidden_image_subjects.some(x=>/before and after|medical|disease/i.test(x)),'Nutrition policy must reject unsupported health-result imagery and medical claims.');
+
+const futureUnknown={business_name:'Bayou Drone Mapping',research_json:JSON.stringify({vertical:'Aerial Mapping & Drone Photography',identity_confidence:'high',services:[{name:'Aerial Property Photography',confidence:'high'},{name:'Drone Mapping',confidence:'high'}],design_profile:{image_theme:'professional aerial mapping and drone photography'}})};
+const derivedPolicy=resolveImagePolicy(futureUnknown);
+assert.equal(derivedPolicy.policy_mode,'derived','An unknown but well-researched future vertical must receive a prospect-specific derived policy.');
+assert.match(derivedPolicy.policy_id,/^derived\./);
+assert.ok(derivedPolicy.verified_service_names.includes('Drone Mapping'));
+assert.ok(derivedPolicy.hard_reject_rules.some(x=>x.code==='unsupported_service'),'Derived policies must inherit universal hard rejects and cannot invent capabilities.');
+assert.ok(derivedPolicy.hard_reject_rules.some(x=>x.code==='fabricated_branding'),'Derived policies must preserve universal branding safeguards.');
+
+const insufficient=resolveImagePolicy({business_name:'Mystery Business',research_json:JSON.stringify({identity_confidence:'high'})});
+assert.equal(insufficient.policy_mode,'insufficient-research','A prospect with no useful vertical or service evidence must stop for research review instead of silently using arbitrary imagery.');
+assert.equal(insufficient.status,'blocked');
 
 const repairedHtml=applyAIImages('<!doctype html><html><head></head><body><div style="background-image:url(https://old.example/hero.jpg)"></div></body></html>',{hero:'https://old.example/hero.jpg',secondary:'https://old.example/secondary.jpg'},{policy_id:'food.restaurant',hero:{asset_path:'/assets/hero.webp'},secondary:{asset_path:'/assets/secondary.webp'}});
 assert.match(repairedHtml,/\/assets\/hero\.webp/,'Applied concept HTML must reference the local hero asset.');
@@ -50,6 +70,8 @@ assert.match(pipeline,/safeSecondaryFallback/,'A safe secondary image that narro
 assert.match(pipeline,/approved_hero_reuse/,'Secondary exhaustion must have an explicit last-resort approved-hero fallback instead of failing the entire concept.');
 assert.match(pipeline,/degraded_fallback/,'Fallback image decisions must remain observable in image metadata.');
 assert.match(pipeline,/rejectionSummary/,'Image failures must retain actionable score and QA diagnostics.');
+assert.match(pipeline,/policy_mode==='insufficient-research'/,'Image generation must stop before provider calls when research cannot support a safe visual policy.');
+assert.match(pipeline,/policy_mode:policy\.policy_mode/,'Resolved visual policy mode must remain observable in build output.');
 assert.match(provider,/gpt-image-2\.5-sunburst/,'Production image provider must preserve the current model default.');
 assert.match(provider,/1536x1024/,'Image provider must support landscape concept images.');
 assert.match(pipeline,/generateImageAsset/,'Image generation must run through the provider abstraction.');
