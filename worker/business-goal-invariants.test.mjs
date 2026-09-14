@@ -44,6 +44,7 @@ assert.match(conceptWorker, /\/v6\/deployments\/\$\{encodeURIComponent\(deployme
 assert.match(conceptWorker, /deploymentFileBytes/,'Design Studio previews must proxy exact stored deployment bytes instead of iframeing a Vercel deployment host.');
 assert.match(conceptWorker, /frame-ancestors 'self'/,'Same-origin Design Studio preview HTML must explicitly permit embedding only by CajunSites itself.');
 assert.doesNotMatch(conceptWorker, /location:`https:\/\/\$\{host\}`/,'Design Studio must not redirect the iframe to a Vercel host that can refuse framing.');
+assert.doesNotMatch(conceptWorker, /export default\{async fetch\(request,env,context\)\{\s*if\(env\.DB\)[\s\S]*?await ensure\(env\)/,'Ordinary admin requests must not run concept schema bootstrap before routing.');
 assert.match(staleRecovery, /STALE_MINUTES=15/,'Interrupted concept builds must self-heal instead of staying Building forever.');
 
 assert.match(conceptFactory, /verifySourceFiles/,'Concept preview deployments must verify exact stored source files before activation.');
