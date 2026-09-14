@@ -178,7 +178,6 @@ async function buildGate(env,id){
 }
 
 export default{async fetch(request,env,context){
-  if(env.DB){try{await ensure(env)}catch(e){console.error('Concept schema compatibility bootstrap failed',e)}}
   const url=new URL(request.url),preview=url.pathname.match(PREVIEW),chat=url.pathname.match(DESIGN_CHAT),m=url.pathname.match(BUILD);
   if(preview&&request.method==='GET')return exactConceptPreview(request,env,context,Number(preview[1]),preview[2]||'');
   if(chat&&request.method==='GET')return designChatWithExactPreview(request,env,context,Number(chat[1]));
