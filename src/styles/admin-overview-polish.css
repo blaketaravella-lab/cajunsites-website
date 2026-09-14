@@ -10,6 +10,11 @@ body.cs-admin .nav-icon{width:18px!important;height:18px!important}
 body.cs-admin .nav-icon svg{width:16px!important;height:16px!important}
 body.cs-admin .foot{padding:10px 10px 0!important}
 
+/* Error banners are opt-in only. Successful dashboard loads must not leave
+   the default error message visible. */
+body.cs-admin[data-page="overview"] .load-error{display:none!important}
+body.cs-admin[data-page="overview"] .load-error.show{display:flex!important;align-items:center;gap:8px;margin:0 0 12px;color:#a12b2b;font-size:.78rem;font-weight:600}
+
 body.cs-admin[data-page="overview"] .content{max-width:1480px!important;padding-top:28px!important}
 body.cs-admin[data-page="overview"] .head{margin-bottom:18px!important}
 body.cs-admin[data-page="overview"] .head p{max-width:660px!important}
