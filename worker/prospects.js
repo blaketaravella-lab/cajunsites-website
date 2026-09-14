@@ -57,15 +57,15 @@ async function recordActivity(env, user, description, metadata = null) {
   } catch {}
 }
 
-async function listProspects(env, url) {
+async function listProspects(env, tenantId, url) {
   await ensureSchema(env);
   const includeConverted = url.searchParams.get('include_converted') === '1';
-  const sql = includeConverted ? 'SELECT * FROM prospects ORDER BY id DESC' : 'SELECT * FROM prospects WHERE customer_id IS NULL ORDER BY id DESC';
-  const result = await env.DB.prepare(sql).all();
+  const sql = includeConverted ? 'SELECT * FROM prospects WHERE tenant_id=? ORDER BY id DESC' : 'SELECT * FROM prospects WHERE tenant_id=? AND customer_id IS NULL ORDER BY id DESC';
+  const result = await env.DB.prepare(sql).bind(tenantId).all();
   return json({ ok: true, prospects: result.results || [], stages: PROSPECT_STAGES, include_converted: includeConverted });
 }
 
-async function createProspect(request, env, user) {
+async function createProspect(request, env, user, tenantId) {
   if (user.role === 'read_only') return json({ ok:false, error:'Your role is read only.' }, 403);
   let data; try { data = await request.json(); } catch { return json({ ok:false,error:'Invalid request.' },400); }
   const business = clean(data.business_name, 200), city = clean(data.city,120), state = clean(data.state,40);
@@ -73,16 +73,16 @@ async function createProspect(request, env, user) {
   if (!business) return json({ ok:false,error:'Business name is required.' },400);
   if (!city || !state) return json({ ok:false,error:'City and state are required so research can identify the correct business.' },400);
   const result = await env.DB.prepare(`INSERT INTO prospects
-    (business_name,category,city,state,concept_url,stage,qualification,website_gate,contact_name,phone,email,call_attempts,decision_maker_reached,concept_viewed,next_follow_up,outcome,notes,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-    .bind(business,clean(data.category,160)||null,city,state,clean(data.concept_url,1000)||null,stage,clean(data.qualification,40)||null,clean(data.website_gate,200)||null,clean(data.contact_name,160)||null,clean(data.phone,80)||null,clean(data.email,255)||null,Number(data.call_attempts||0),data.decision_maker_reached?1:0,data.concept_viewed?1:0,clean(data.next_follow_up,80)||null,clean(data.outcome,160)||null,clean(data.notes,4000)||null).run();
+    (tenant_id,business_name,category,city,state,concept_url,stage,qualification,website_gate,contact_name,phone,email,call_attempts,decision_maker_reached,concept_viewed,next_follow_up,outcome,notes,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
+    .bind(tenantId,business,clean(data.category,160)||null,city,state,clean(data.concept_url,1000)||null,stage,clean(data.qualification,40)||null,clean(data.website_gate,200)||null,clean(data.contact_name,160)||null,clean(data.phone,80)||null,clean(data.email,255)||null,Number(data.call_attempts||0),data.decision_maker_reached?1:0,data.concept_viewed?1:0,clean(data.next_follow_up,80)||null,clean(data.outcome,160)||null,clean(data.notes,4000)||null).run();
   await recordActivity(env,user,`${user.name} added prospect ${business}`,{prospect_id:result.meta?.last_row_id||null,identity_anchor:{business_name:business,city,state}});
   return json({ok:true,id:result.meta?.last_row_id||null});
 }
 
-async function updateProspect(request, env, user, id) {
+async function updateProspect(request, env, user, tenantId, id) {
   if (user.role === 'read_only') return json({ok:false,error:'Your role is read only.'},403);
-  const existing = await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  const existing = await env.DB.prepare('SELECT * FROM prospects WHERE tenant_id=? AND id=? LIMIT 1').bind(tenantId,id).first();
   if (!existing) return json({ok:false,error:'Prospect not found.'},404);
   if (existing.customer_id) return json({ok:false,error:'Converted prospects are preserved as history and cannot be edited from the active prospect workflow.'},409);
   let data; try { data = await request.json(); } catch { return json({ok:false,error:'Invalid request.'},400); }
@@ -107,18 +107,18 @@ async function updateProspect(request, env, user, id) {
     notes:data.notes!==undefined?clean(data.notes,4000):existing.notes,
   };
   if (!values.business_name) return json({ok:false,error:'Business name is required.'},400);
-  await env.DB.prepare(`UPDATE prospects SET business_name=?,category=?,city=?,state=?,concept_url=?,stage=?,qualification=?,website_gate=?,contact_name=?,phone=?,email=?,call_attempts=?,decision_maker_reached=?,concept_viewed=?,next_follow_up=?,outcome=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-    .bind(values.business_name,values.category||null,values.city||null,values.state||null,values.concept_url||null,values.stage,values.qualification||null,values.website_gate||null,values.contact_name||null,values.phone||null,values.email||null,values.call_attempts,values.decision_maker_reached,values.concept_viewed,values.next_follow_up||null,values.outcome||null,values.notes||null,id).run();
+  await env.DB.prepare(`UPDATE prospects SET business_name=?,category=?,city=?,state=?,concept_url=?,stage=?,qualification=?,website_gate=?,contact_name=?,phone=?,email=?,call_attempts=?,decision_maker_reached=?,concept_viewed=?,next_follow_up=?,outcome=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?`)
+    .bind(values.business_name,values.category||null,values.city||null,values.state||null,values.concept_url||null,values.stage,values.qualification||null,values.website_gate||null,values.contact_name||null,values.phone||null,values.email||null,values.call_attempts,values.decision_maker_reached,values.concept_viewed,values.next_follow_up||null,values.outcome||null,values.notes||null,tenantId,id).run();
   await recordActivity(env,user,`${user.name} updated prospect ${values.business_name}`,{prospect_id:id,from_stage:existing.stage,to_stage:values.stage});
   return json({ok:true});
 }
 
-async function deleteProspect(env, user, id) {
+async function deleteProspect(env, user, tenantId, id) {
   if (!['owner','admin'].includes(user.role)) return json({ok:false,error:'Admin access is required to remove prospects.'},403);
-  const existing = await env.DB.prepare('SELECT business_name,customer_id FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  const existing = await env.DB.prepare('SELECT business_name,customer_id FROM prospects WHERE tenant_id=? AND id=? LIMIT 1').bind(tenantId,id).first();
   if (!existing) return json({ok:false,error:'Prospect not found.'},404);
   if (existing.customer_id) return json({ok:false,error:'Converted prospects are retained as customer history and cannot be removed.'},409);
-  await env.DB.prepare('DELETE FROM prospects WHERE id=?').bind(id).run();
+  await env.DB.prepare('DELETE FROM prospects WHERE tenant_id=? AND id=?').bind(tenantId,id).run();
   await recordActivity(env,user,`${user.name} removed prospect ${existing.business_name}`,{prospect_id:id});
   return json({ok:true});
 }
@@ -128,17 +128,18 @@ async function handleProspects(request, env, url) {
   const user = await currentUser(request, env);
   if (!user) return json({ok:false,error:'Authentication required.'},401);
   if (!sameOriginMutation(request)) return json({ok:false,error:'Invalid request origin.'},403);
+  const tenantId=Number(user.current_tenant_id);if(!Number.isInteger(tenantId)||tenantId<=0)return json({ok:false,error:'No active tenant context was found.'},403);
   await ensureSchema(env);
   if (url.pathname === '/api/admin/prospects') {
-    if (request.method === 'GET') return listProspects(env,url);
-    if (request.method === 'POST') return createProspect(request,env,user);
+    if (request.method === 'GET') return listProspects(env,tenantId,url);
+    if (request.method === 'POST') return createProspect(request,env,user,tenantId);
     return json({ok:false,error:'Method not allowed.'},405);
   }
   const match = url.pathname.match(/^\/api\/admin\/prospects\/(\d+)$/);
   if (!match) return json({ok:false,error:'Not found.'},404);
   const id = Number(match[1]);
-  if (request.method === 'PATCH') return updateProspect(request,env,user,id);
-  if (request.method === 'DELETE') return deleteProspect(env,user,id);
+  if (request.method === 'PATCH') return updateProspect(request,env,user,tenantId,id);
+  if (request.method === 'DELETE') return deleteProspect(env,user,tenantId,id);
   return json({ok:false,error:'Method not allowed.'},405);
 }
 
