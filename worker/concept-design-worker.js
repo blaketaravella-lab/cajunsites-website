@@ -1,6 +1,6 @@
 import appWorker from './stale-build-recovery.js';
 import staticBuildWorker from './concept-factory-v2.js';
-import { resolveDesignSpec, designSpecSummary } from './design-intelligence.js';
+import { compileConceptArchitecture, bridgeArchitectureIntoResearch, ARCHITECTURE_VERSION } from './concept-architecture.js';
 
 const BUILD=/^\/api\/admin\/prospects\/(\d+)\/build-concept$/;
 const PREVIEW=/^\/api\/admin\/prospects\/(\d+)\/concept-preview(?:\/(.*))?$/;
@@ -8,7 +8,6 @@ const DESIGN_CHAT=/^\/api\/admin\/design-chat\/(\d+)$/;
 const json=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 const ACTIVE=['Preparing','Generating Images','Packaging','Deploying','Verifying','Activating','Committing'];
 
-function parse(v,f={}){try{return v?JSON.parse(v):f}catch{return f}}
 function vq(env){const p=new URLSearchParams();if(env.VERCEL_TEAM_ID)p.set('teamId',env.VERCEL_TEAM_ID);return p.toString()?`?${p}`:''}
 function bytesFromBase64(v){const s=String(v||'').replace(/^data:[^,]+,/,'');const bin=atob(s),out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out}
 function flattenFiles(nodes,prefix=''){const out=[];for(const node of Array.isArray(nodes)?nodes:[]){const path=prefix?`${prefix}/${node.name}`:node.name;if(node.type==='file')out.push({path,uid:node.uid,name:node.name});if(Array.isArray(node.children))out.push(...flattenFiles(node.children,path))}return out}
@@ -64,8 +63,18 @@ async function ensure(env){
     `ALTER TABLE prospects ADD COLUMN design_spec_json TEXT`,
     `ALTER TABLE prospects ADD COLUMN design_spec_version TEXT`,
     `ALTER TABLE prospects ADD COLUMN design_spec_updated_at TEXT`,
+    `ALTER TABLE prospects ADD COLUMN verified_business_profile_json TEXT`,
+    `ALTER TABLE prospects ADD COLUMN concept_strategy_json TEXT`,
+    `ALTER TABLE prospects ADD COLUMN concept_design_model_json TEXT`,
+    `ALTER TABLE prospects ADD COLUMN concept_image_plan_json TEXT`,
+    `ALTER TABLE prospects ADD COLUMN concept_architecture_version TEXT`,
+    `ALTER TABLE prospects ADD COLUMN concept_build_readiness TEXT`,
     `ALTER TABLE concept_builds ADD COLUMN design_spec_json TEXT`,
-    `ALTER TABLE concept_builds ADD COLUMN design_spec_version TEXT`
+    `ALTER TABLE concept_builds ADD COLUMN design_spec_version TEXT`,
+    `ALTER TABLE concept_builds ADD COLUMN concept_strategy_json TEXT`,
+    `ALTER TABLE concept_builds ADD COLUMN concept_design_model_json TEXT`,
+    `ALTER TABLE concept_builds ADD COLUMN concept_image_plan_json TEXT`,
+    `ALTER TABLE concept_builds ADD COLUMN architecture_version TEXT`
   ]){try{await env.DB.prepare(sql).run()}catch(e){if(!/duplicate column|already exists/i.test(String(e?.message||e)))throw e}}
 }
 
@@ -103,78 +112,46 @@ async function exactConceptPreview(request,env,context,id,requestedPath=''){
   const deploymentId=String(p.concept_deployment_id||'').trim();
   if(!deploymentId)return json({ok:false,error:'This prospect does not have a completed concept deployment yet.'},410);
   if(!env.VERCEL_API_TOKEN)return json({ok:false,error:'Vercel preview access is not configured.'},503);
-
   const logicalPath=(requestedPath||'').replace(/^\/+|\/+$/g,'')||'index.html';
   const allowed=new Set(['index.html','assets/hero.webp','assets/secondary.webp','concept-manifest.json']);
   if(!allowed.has(logicalPath))return json({ok:false,error:'Preview asset not found.'},404);
-
   try{
-    const tree=await vercelJson(env,`/v6/deployments/${encodeURIComponent(deploymentId)}/files`);
-    const flat=flattenFiles(tree);
-    const node=flat.find(x=>x.path===logicalPath)||flat.find(x=>x.path.endsWith(`/${logicalPath}`));
+    const tree=await vercelJson(env,`/v6/deployments/${encodeURIComponent(deploymentId)}/files`),flat=flattenFiles(tree),node=flat.find(x=>x.path===logicalPath)||flat.find(x=>x.path.endsWith(`/${logicalPath}`));
     if(!node?.uid)return json({ok:false,error:`The stored prospect deployment is missing ${logicalPath}.`},410);
-    const bytes=await deploymentFileBytes(env,deploymentId,node.uid);
-    const headers={
-      'cache-control':'private, no-store, no-cache, must-revalidate',
-      'x-cajunsites-prospect-id':String(id),
-      'x-cajunsites-deployment-id':deploymentId,
-      'x-content-type-options':'nosniff'
-    };
+    const bytes=await deploymentFileBytes(env,deploymentId,node.uid),headers={'cache-control':'private, no-store, no-cache, must-revalidate','x-cajunsites-prospect-id':String(id),'x-cajunsites-deployment-id':deploymentId,'x-content-type-options':'nosniff'};
     if(logicalPath==='index.html'){
-      let html=new TextDecoder().decode(bytes);
-      const base=`/api/admin/prospects/${id}/concept-preview`;
-      html=html
-        .replaceAll('/assets/hero.webp',`${base}/assets/hero.webp`)
-        .replaceAll('/assets/secondary.webp',`${base}/assets/secondary.webp`)
-        .replaceAll('/concept-manifest.json',`${base}/concept-manifest.json`);
-      headers['content-type']='text/html; charset=utf-8';
-      headers['content-security-policy']="default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self';";
-      return new Response(html,{status:200,headers});
+      let html=new TextDecoder().decode(bytes);const base=`/api/admin/prospects/${id}/concept-preview`;
+      html=html.replaceAll('/assets/hero.webp',`${base}/assets/hero.webp`).replaceAll('/assets/secondary.webp',`${base}/assets/secondary.webp`).replaceAll('/concept-manifest.json',`${base}/concept-manifest.json`);
+      headers['content-type']='text/html; charset=utf-8';headers['content-security-policy']="default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self';";return new Response(html,{status:200,headers});
     }
-    headers['content-type']=logicalPath.endsWith('.webp')?'image/webp':'application/json; charset=utf-8';
-    return new Response(bytes,{status:200,headers});
-  }catch(e){
-    return json({ok:false,error:String(e?.message||e),prospect_id:id,deployment_id:deploymentId},502);
-  }
+    headers['content-type']=logicalPath.endsWith('.webp')?'image/webp':'application/json; charset=utf-8';return new Response(bytes,{status:200,headers});
+  }catch(e){return json({ok:false,error:String(e?.message||e),prospect_id:id,deployment_id:deploymentId},502)}
 }
 
 async function designChatWithExactPreview(request,env,context,id){
   const response=await appWorker.fetch(request,env,context);
   if(!response.ok||!env.DB||!String(response.headers.get('content-type')||'').includes('application/json'))return response;
-  const payload=await response.clone().json().catch(()=>null);
-  if(!payload?.prospect||Number(payload.prospect.id)!==id)return response;
-  const p=await env.DB.prepare('SELECT concept_deployment_id,concept_build_id,concept_state FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  const payload=await response.clone().json().catch(()=>null);if(!payload?.prospect||Number(payload.prospect.id)!==id)return response;
+  const p=await env.DB.prepare('SELECT concept_deployment_id,concept_build_id,concept_state,concept_strategy_json,concept_design_model_json,concept_image_plan_json,concept_build_readiness FROM prospects WHERE id=? LIMIT 1').bind(id).first();
   const deploymentId=String(p?.concept_deployment_id||'').trim();
-  payload.prospect.concept_deployment_id=deploymentId||null;
-  payload.prospect.concept_build_id=p?.concept_build_id||null;
-  payload.prospect.concept_state=p?.concept_state||payload.prospect.concept_state||'Not Built';
-  payload.prospect.concept_url=deploymentId?`${new URL(request.url).origin}/api/admin/prospects/${id}/concept-preview`:null;
-  payload.prospect.public_concept_url=null;
+  payload.prospect.concept_deployment_id=deploymentId||null;payload.prospect.concept_build_id=p?.concept_build_id||null;payload.prospect.concept_state=p?.concept_state||payload.prospect.concept_state||'Not Built';payload.prospect.concept_url=deploymentId?`${new URL(request.url).origin}/api/admin/prospects/${id}/concept-preview`:null;payload.prospect.public_concept_url=null;
+  payload.concept_strategy=p?.concept_strategy_json?JSON.parse(p.concept_strategy_json):null;payload.current_design=p?.concept_design_model_json?JSON.parse(p.concept_design_model_json):payload.current_design;payload.image_plan=p?.concept_image_plan_json?JSON.parse(p.concept_image_plan_json):null;payload.build_readiness=p?.concept_build_readiness||null;
   return new Response(JSON.stringify(payload),{status:response.status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 }
 
 async function prepare(env,id){
-  await ensure(env);
-  const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();
-  if(!p)throw new Error('Prospect not found.');
-  const r=parse(p.research_json,{}),visual={layout:r?.design_profile?.layout,headline:r?.design_profile?.headline},spec=resolveDesignSpec(p,visual);
-  const profile={...(r.design_profile||{}),headline:spec.headline||r?.design_profile?.headline,cta:spec.cta_strategy?.[0]||r?.design_profile?.cta,sections:spec.section_sequence,process:spec.process?.length?spec.process:r?.design_profile?.process,image_theme:spec.image_theme||r?.design_profile?.image_theme,layout:spec.hero,objective:spec.objective,mobile_strategy:spec.mobile_strategy,trust_strategy:spec.trust_strategy,services_presentation:spec.services_presentation,content_density:spec.content_density,imagery_strategy:spec.imagery_strategy,section_sequence:spec.section_sequence,cta_strategy:spec.cta_strategy,personality:spec.personality};
-  const next={...r,design_profile:profile,design_spec:spec};
-  await env.DB.prepare(`UPDATE prospects SET research_json=?,design_spec_json=?,design_spec_version='1.0',design_spec_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(JSON.stringify(next),JSON.stringify(spec),id).run();
-  try{await env.DB.prepare(`INSERT INTO admin_activity (customer_id,event_type,description,metadata_json,created_at) VALUES (NULL,'design_intelligence',?,?,CURRENT_TIMESTAMP)`).bind(`Resolved Concept Build design strategy for ${p.business_name}`,JSON.stringify({prospect_id:id,design_spec:spec,summary:designSpecSummary(spec)})).run()}catch{}
-  return spec;
+  await ensure(env);const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p)throw new Error('Prospect not found.');
+  const architecture=await compileConceptArchitecture(env,p),nextResearch=bridgeArchitectureIntoResearch(p,architecture);
+  await env.DB.prepare(`UPDATE prospects SET research_json=?,verified_business_profile_json=?,concept_strategy_json=?,concept_design_model_json=?,concept_image_plan_json=?,concept_architecture_version=?,concept_build_readiness=?,design_spec_json=?,design_spec_version=?,design_spec_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(JSON.stringify(nextResearch),JSON.stringify(architecture.profile),JSON.stringify(architecture.strategy),JSON.stringify(architecture.design_model),JSON.stringify(architecture.image_plan),architecture.architecture_version,architecture.build_readiness,JSON.stringify(architecture.strategy),architecture.architecture_version,id).run();
+  try{await env.DB.prepare(`INSERT INTO admin_activity (customer_id,event_type,description,metadata_json,created_at) VALUES (NULL,'concept_architecture',?,?,CURRENT_TIMESTAMP)`).bind(`Compiled verified business profile and concept strategy for ${p.business_name}`,JSON.stringify({prospect_id:id,architecture_version:architecture.architecture_version,build_readiness:architecture.build_readiness,source:architecture.source,warning:architecture.warning||null,objective:architecture.strategy?.objective,image_roles:(architecture.image_plan?.roles||[]).map(x=>x.role)})).run()}catch{}
+  return architecture;
 }
 
 async function buildGate(env,id){
-  const p=await env.DB.prepare('SELECT concept_state,concept_build_id,concept_url FROM prospects WHERE id=? LIMIT 1').bind(id).first();
-  if(!p||p.concept_state!=='Building')return null;
-  const b=p.concept_build_id?await env.DB.prepare('SELECT build_id,status,started_at FROM concept_builds WHERE build_id=? LIMIT 1').bind(p.concept_build_id).first():null;
-  const fresh=b?.started_at&&Date.parse(String(b.started_at).replace(' ','T')+'Z')>Date.now()-15*60*1000;
+  const p=await env.DB.prepare('SELECT concept_state,concept_build_id,concept_url FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p||p.concept_state!=='Building')return null;
+  const b=p.concept_build_id?await env.DB.prepare('SELECT build_id,status,started_at FROM concept_builds WHERE build_id=? LIMIT 1').bind(p.concept_build_id).first():null,fresh=b?.started_at&&Date.parse(String(b.started_at).replace(' ','T')+'Z')>Date.now()-15*60*1000;
   if(b&&ACTIVE.includes(b.status)&&fresh)return{blocked:true,build_id:b.build_id,status:b.status};
-  const message='Previous concept build stopped before completion and was released so a new build can start.';
-  await env.DB.prepare(`UPDATE prospects SET concept_state=CASE WHEN COALESCE(concept_url,'')<>'' THEN 'Built' ELSE 'Build Failed' END,concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND concept_state='Building'`).bind(message,id).run();
-  if(b?.build_id&&ACTIVE.includes(b.status))await env.DB.prepare(`UPDATE concept_builds SET status='Failed',completed_at=CURRENT_TIMESTAMP,error_stage='Interrupted',error_message=? WHERE build_id=?`).bind(message,b.build_id).run().catch(()=>{});
-  return null;
+  const message='Previous concept build stopped before completion and was released so a new build can start.';await env.DB.prepare(`UPDATE prospects SET concept_state=CASE WHEN COALESCE(concept_url,'')<>'' THEN 'Built' ELSE 'Build Failed' END,concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND concept_state='Building'`).bind(message,id).run();if(b?.build_id&&ACTIVE.includes(b.status))await env.DB.prepare(`UPDATE concept_builds SET status='Failed',completed_at=CURRENT_TIMESTAMP,error_stage='Interrupted',error_message=? WHERE build_id=?`).bind(message,b.build_id).run().catch(()=>{});return null;
 }
 
 export default{async fetch(request,env,context){
@@ -182,12 +159,14 @@ export default{async fetch(request,env,context){
   if(preview&&request.method==='GET')return exactConceptPreview(request,env,context,Number(preview[1]),preview[2]||'');
   if(chat&&request.method==='GET')return designChatWithExactPreview(request,env,context,Number(chat[1]));
   if(!(m&&request.method==='POST'&&env.DB))return appWorker.fetch(request,env,context);
-  const id=Number(m[1]);
-  const gate=await buildGate(env,id);
-  if(gate?.blocked)return json({ok:false,error:`A concept build is already in progress (${gate.status}).`,build_id:gate.build_id,error_stage:gate.status,in_progress:true},409);
-  let spec;
-  try{spec=await prepare(env,id)}catch(e){return json({ok:false,error:`Design strategy failed: ${String(e?.message||e)}`},500)}
+  const id=Number(m[1]),gate=await buildGate(env,id);if(gate?.blocked)return json({ok:false,error:`A concept build is already in progress (${gate.status}).`,build_id:gate.build_id,error_stage:gate.status,in_progress:true},409);
+  let architecture;try{architecture=await prepare(env,id)}catch(e){return json({ok:false,error:`Concept strategy failed: ${String(e?.message||e)}`},500)}
+  if(architecture.build_readiness!=='ready'){
+    const identity=architecture.build_readiness==='needs_identity_review',message=identity?'Business identity needs review before a concept can be built.':'Business research needs more verified detail before a concept can be built.';
+    await env.DB.prepare(`UPDATE prospects SET concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(message,id).run().catch(()=>{});
+    return json({ok:false,error:message,requires_review:true,review_type:identity?'identity':'research',build_readiness:architecture.build_readiness},409);
+  }
   const response=await staticBuildWorker.fetch(request,env,context);
-  if(response.ok){try{const payload=await response.clone().json();if(payload?.build_id)await env.DB.prepare(`UPDATE concept_builds SET design_spec_json=?,design_spec_version='1.0' WHERE build_id=?`).bind(JSON.stringify(spec),payload.build_id).run()}catch{}}
+  if(response.ok){try{const payload=await response.clone().json();if(payload?.build_id)await env.DB.prepare(`UPDATE concept_builds SET design_spec_json=?,design_spec_version=?,concept_strategy_json=?,concept_design_model_json=?,concept_image_plan_json=?,architecture_version=? WHERE build_id=?`).bind(JSON.stringify(architecture.strategy),ARCHITECTURE_VERSION,JSON.stringify(architecture.strategy),JSON.stringify(architecture.design_model),JSON.stringify(architecture.image_plan),ARCHITECTURE_VERSION,payload.build_id).run()}catch{}}
   return response;
 }};
