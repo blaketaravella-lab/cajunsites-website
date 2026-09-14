@@ -1,0 +1,23 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "concept-pipeline-service",
+  "main": "./src/index.js",
+  "compatibility_date": "2026-09-14",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "concept-pipeline-production",
+      "database_id": "PROVISION_BEFORE_DEPLOYMENT"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "concept-pipeline-assets"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
