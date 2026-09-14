@@ -14,6 +14,8 @@ assert.match(heroBrief.prompt,/trusted business identity \(barber\) controls thi
 assert.match(heroBrief.prompt,/mechanic|automotive|engine/i,'Barber policy must explicitly exclude automotive imagery.');
 assert.match(heroBrief.prompt,/30 percent negative space/i,'Hero prompt must reserve website copy space.');
 assert.match(heroBrief.prompt,/representative only/i,'Generated imagery must remain representative, never actual-work evidence.');
+const secondaryBrief=buildImageBrief(sidelines,'secondary',sidelinesPolicy);
+assert.match(secondaryBrief.prompt,/does not need to depict a different verified service/i,'Secondary imagery must support relevant environmental/detail compositions instead of requiring a different service.');
 
 const dentist={business_name:'Example Dental',category:'Dentistry',verified_services_json:JSON.stringify([{name:'Dental Cleaning'}]),enrichment_provenance_json:JSON.stringify({category:{origin:'manual'},verified_services_json:{origin:'manual'}}),research_json:JSON.stringify({vertical:'Dentistry',services:[{name:'Dental Implants',confidence:'high'}]})};
 const dentalPolicy=resolveImagePolicy(dentist);
@@ -29,7 +31,7 @@ assert.ok(restaurantPolicy.allowed_image_subjects.some(x=>/burger|grill|food/i.t
 assert.ok(restaurantPolicy.thresholds.overall_auto_approve<=80,'Restaurant policy must avoid the overly strict generic threshold that caused repeated valid secondary-image rejection.');
 assert.ok(restaurantPolicy.qa_instructions.specialty_checks.some(x=>/secondary image/i.test(x)),'Restaurant QA must explicitly allow a distinct representative secondary composition.');
 
-const repairedHtml=applyAIImages('<!doctype html><html><head></head><body><div style="background-image:url(https://old.example/hero.jpg)"></div></body></html>',{hero:'https://old.example/hero.jpg',secondary:'https://old.example/secondary.jpg'},{policy_id:'food.restaurant',hero:{asset_path:'/assets/hero.webp'},secondary:{asset_path:'/assets/secondary.webp'}});
+const repairedHtml=applyAIImages('<!doctype html><html><head></head><body><div style="background-image:url(https://old.example/hero.jpg)"></div></body></html>',{hero:'https://old.example/hero.jpg',secondary:'https://old.example/secondary.jpg'},{policy_id:'food.restaurant',hero:{asset_path:'/assets/hero.webp'},secondary:{asset_path:'/assets/secondary.webp',fallback:true}});
 assert.match(repairedHtml,/\/assets\/hero\.webp/,'Applied concept HTML must reference the local hero asset.');
 assert.match(repairedHtml,/\/assets\/secondary\.webp/,'Applied concept HTML must reference the local secondary asset even when the renderer omits its legacy source URL.');
 assert.match(repairedHtml,/rel="preload" as="image" href="\/assets\/secondary\.webp"/,'Missing optional image references must be repaired before deployment verification.');
@@ -42,8 +44,12 @@ const staleRecovery=fs.readFileSync('worker/stale-build-recovery.js','utf8');
 const reliabilityWorker=fs.readFileSync('worker/reliability-hotfix.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const migration=fs.readFileSync('migrations/0013_ai_image_pipeline.sql','utf8');
-assert.match(pipeline,/MAX_ATTEMPTS=3/,'Image generation must cap retries.');
-assert.match(pipeline,/Suitable \$\{role\} imagery could not be verified/,'Image pipeline must fail closed after retry exhaustion.');
+assert.match(pipeline,/HERO_ATTEMPTS=4/,'Hero generation must have a bounded but resilient retry budget.');
+assert.match(pipeline,/SECONDARY_ATTEMPTS=2/,'Secondary generation must avoid excessive retries before safe fallback.');
+assert.match(pipeline,/QA_RETRIES=2/,'Transient visual QA errors must retry against the same generated image.');
+assert.match(pipeline,/safe_quality_floor/,'Safe near-threshold imagery must be recoverable after strict retry exhaustion.');
+assert.match(pipeline,/approved_hero_fallback/,'A failed secondary must safely reuse the already-approved hero instead of failing the entire concept build.');
+assert.match(pipeline,/Suitable \$\{role\} imagery could not be verified/,'A truly unacceptable hero must still fail closed after bounded retries.');
 assert.match(provider,/gpt-image-2\.5-sunburst/,'Production image provider must preserve the current model default.');
 assert.match(provider,/1536x1024/,'Image provider must support landscape concept images.');
 assert.match(pipeline,/generateImageAsset/,'Image generation must run through the provider abstraction.');
