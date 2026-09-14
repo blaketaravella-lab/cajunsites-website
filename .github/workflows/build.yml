@@ -51,5 +51,9 @@ jobs:
         run: node worker/business-goal-invariants.test.mjs
       - name: Test Customer Lifecycle Invariants
         run: node worker/customer-lifecycle.test.mjs
+      - name: Test Organization Authentication Invariants
+        run: node worker/organization-auth.test.mjs
+      - name: Test Tenant Concept Isolation Invariants
+        run: node worker/tenant-concept-isolation.test.mjs
       - name: Build Astro site
         run: npm run build
