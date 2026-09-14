@@ -23,7 +23,9 @@ must(mobileCss.includes('grid-template-columns:minmax(0,1fr)!important'),'Dense 
 must(mobileCss.includes('.admin-table td::before'),'Phone table cards must retain field labels.');
 must(mobileCss.includes('@media(max-width:360px)'),'Admin mobile layout must include a narrow-phone fallback.');
 must(engine.includes('name="viewport" content="width=device-width,initial-scale=1"'),'Concept sites must include the responsive viewport meta tag.');
-must(engine.includes('@media(max-width:760px)'),'Concept design system must include a phone/tablet breakpoint.');
-must(engine.includes('.intro,.cards,.story,.contact-box{grid-template-columns:1fr}'),'Concept content grids must collapse to one column.');
+must(engine.includes('@media(max-width:800px)'),'Concept architecture renderer must include a phone/tablet breakpoint.');
+must(engine.includes('.service-grid,.steps{grid-template-columns:1fr}'),'Concept service and process grids must collapse to one column.');
+must(engine.includes('.section-head,.trust-grid,.about-grid,.contact-grid{grid-template-columns:1fr;display:grid'),'Concept content grids must collapse safely on mobile.');
+must(engine.includes('.mobile-bar{display:flex;position:fixed'),'Concept sites must expose a mobile conversion bar.');
 
 console.log('Mobile responsiveness invariants passed.');
