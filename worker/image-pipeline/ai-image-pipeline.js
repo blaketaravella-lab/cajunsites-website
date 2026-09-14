@@ -77,8 +77,21 @@ export async function generateApprovedConceptImages(env,prospect,buildId){
   return{provider:hero.generated.provider,model:hero.generated.model,policy_id:policy.policy_id,policy_version:policy.version,identity:policy.identity,hero,secondary};
 }
 
+function ensureLocalAssetReferences(html,selection){
+  let out=String(html);
+  const assets=[selection?.hero?.asset_path||ASSET_PATHS.hero,selection?.secondary?.asset_path||ASSET_PATHS.secondary].filter(Boolean);
+  const missing=assets.filter(path=>!out.includes(path));
+  if(!missing.length)return out;
+  const preload=missing.map(path=>`<link rel="preload" as="image" href="${path}">`).join('');
+  if(/<\/head>/i.test(out))return out.replace(/<\/head>/i,`${preload}</head>`);
+  return `${preload}${out}`;
+}
+
 export function applyAIImages(html,system,selection){
-  let out=String(html).split(system.hero).join(selection.hero.asset_path).split(system.secondary).join(selection.secondary.asset_path);
+  let out=String(html);
+  if(system?.hero)out=out.split(system.hero).join(selection.hero.asset_path);
+  if(system?.secondary)out=out.split(system.secondary).join(selection.secondary.asset_path);
+  out=ensureLocalAssetReferences(out,selection);
   out=out.replace('Representative imagery shown for concept direction only.',`AI-generated representative imagery for concept direction only. Visual QA policy: ${selection.policy_id}.`);
   return out;
 }
