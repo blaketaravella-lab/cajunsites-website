@@ -13,7 +13,7 @@ const conceptWorker = read('worker/concept-design-worker.js');
 const conceptFactory = read('worker/concept-factory.js');
 const staleRecovery = read('worker/stale-build-recovery.js');
 const imagePipeline = read('worker/image-pipeline/ai-image-pipeline.js');
-const imagePolicies = read('worker/image-pipeline/policy-registry.js');
+const imagePolicyResolver = read('worker/image-pipeline/policy-resolver.js');
 const wrangler = read('wrangler.jsonc');
 
 // Offer and positioning must stay canonical.
@@ -54,7 +54,8 @@ assert.match(imagePipeline, /representative only/i,'Generated concept imagery mu
 assert.match(imagePipeline, /MAX_ATTEMPTS=3/,'Image generation must remain bounded.');
 assert.match(imagePipeline, /\/assets\/hero\.webp/,'Concept hero imagery must use deployment-local assets.');
 assert.match(imagePipeline, /\/assets\/secondary\.webp/,'Concept secondary imagery must use deployment-local assets.');
-assert.match(imagePolicies, /'food_service\.restaurant'/,'Restaurant concepts must retain restaurant-specific visual QA.');
+assert.match(imagePolicyResolver, /policy_id:'food\.restaurant'/,'Restaurant concepts must retain restaurant-specific visual QA.');
+assert.match(imagePolicyResolver, /secondary image/i,'Restaurant visual QA must explicitly support distinct secondary compositions.');
 assert.doesNotMatch(wrangler, /r2_buckets|IMAGE_ASSETS/,'Concept images must not silently reintroduce an R2 dependency.');
 
 // Admin visual language must keep Overview-alignment layers loaded last.
