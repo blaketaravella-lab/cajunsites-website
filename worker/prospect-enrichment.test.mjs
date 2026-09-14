@@ -53,7 +53,7 @@ must(designChat.includes('You are CajunSites Design Studio')&&designChat.include
 must(designChat.includes('Never change CajunSites admin'),'Design Studio must explicitly prohibit admin/platform mutations.');
 must(designChat.includes('Never invent services, products, credentials'),'Design Studio must preserve verified business truth.');
 must(!designChat.includes("tools:[")&&!designChat.includes('tools: ['),'Design Studio model calls must not expose OpenAI tools.');
-must(designChat.includes('const PROFILE_KEYS=')&&designChat.includes("'concept_design_model_json'")&&designChat.includes("'services_presentation'")&&designChat.includes("'imagery_strategy'"),'Design Studio must use the structured design-model field allowlist.');
+must(designChat.includes('const PROFILE_KEYS=')&&designChat.includes('concept_design_model_json')&&designChat.includes("'services_presentation'")&&designChat.includes("'imagery_strategy'"),'Design Studio must use the structured design-model field allowlist.');
 must(designChat.includes('normalizeProposal'),'Every AI design proposal must be normalized through the allowlist.');
 must(designChat.includes("role='assistant'")&&designChat.includes('proposal_json'),'Only stored assistant proposals may be applied.');
 must(designChat.includes("p.research_status!=='Complete'"),'Design Studio must require completed research before applying a design.');
