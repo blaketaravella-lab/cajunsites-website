@@ -1,6 +1,7 @@
 import appWorker from './stale-build-recovery.js';
 import staticBuildWorker from './concept-factory-v2.js';
 import { compileConceptArchitecture, bridgeArchitectureIntoResearch, ARCHITECTURE_VERSION } from './concept-architecture.js';
+import { resolveTenantContext, requireTenantProspect, TenantAccessError } from './tenant-context.js';
 
 const BUILD=/^\/api\/admin\/prospects\/(\d+)\/build-concept$/;
 const PREVIEW=/^\/api\/admin\/prospects\/(\d+)\/concept-preview(?:\/(.*))?$/;
@@ -103,11 +104,9 @@ async function deploymentFileBytes(env,deploymentId,fileId){
   return bytesFromBase64(b64);
 }
 
-async function exactConceptPreview(request,env,context,id,requestedPath=''){
+async function exactConceptPreview(request,env,context,tenant,id,requestedPath=''){
   if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503);
-  const user=await currentUser(request,env,context);
-  if(!user)return json({ok:false,error:'Authentication required.'},401);
-  const p=await env.DB.prepare('SELECT id,business_name,concept_state,concept_deployment_id FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  const p=await env.DB.prepare('SELECT id,business_name,concept_state,concept_deployment_id FROM prospects WHERE tenant_id=? AND id=? LIMIT 1').bind(tenant.id,id).first();
   if(!p)return json({ok:false,error:'Prospect not found.'},404);
   const deploymentId=String(p.concept_deployment_id||'').trim();
   if(!deploymentId)return json({ok:false,error:'This prospect does not have a completed concept deployment yet.'},410);
@@ -128,45 +127,53 @@ async function exactConceptPreview(request,env,context,id,requestedPath=''){
   }catch(e){return json({ok:false,error:String(e?.message||e),prospect_id:id,deployment_id:deploymentId},502)}
 }
 
-async function designChatWithExactPreview(request,env,context,id){
+async function designChatWithExactPreview(request,env,context,tenant,id){
   const response=await appWorker.fetch(request,env,context);
   if(!response.ok||!env.DB||!String(response.headers.get('content-type')||'').includes('application/json'))return response;
   const payload=await response.clone().json().catch(()=>null);if(!payload?.prospect||Number(payload.prospect.id)!==id)return response;
-  const p=await env.DB.prepare('SELECT concept_deployment_id,concept_build_id,concept_state,concept_strategy_json,concept_design_model_json,concept_image_plan_json,concept_build_readiness FROM prospects WHERE id=? LIMIT 1').bind(id).first();
+  const p=await env.DB.prepare('SELECT concept_deployment_id,concept_build_id,concept_state,concept_strategy_json,concept_design_model_json,concept_image_plan_json,concept_build_readiness FROM prospects WHERE tenant_id=? AND id=? LIMIT 1').bind(tenant.id,id).first();
   const deploymentId=String(p?.concept_deployment_id||'').trim();
   payload.prospect.concept_deployment_id=deploymentId||null;payload.prospect.concept_build_id=p?.concept_build_id||null;payload.prospect.concept_state=p?.concept_state||payload.prospect.concept_state||'Not Built';payload.prospect.concept_url=deploymentId?`${new URL(request.url).origin}/api/admin/prospects/${id}/concept-preview`:null;payload.prospect.public_concept_url=null;
   payload.concept_strategy=p?.concept_strategy_json?JSON.parse(p.concept_strategy_json):null;payload.current_design=p?.concept_design_model_json?JSON.parse(p.concept_design_model_json):payload.current_design;payload.image_plan=p?.concept_image_plan_json?JSON.parse(p.concept_image_plan_json):null;payload.build_readiness=p?.concept_build_readiness||null;
   return new Response(JSON.stringify(payload),{status:response.status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 }
 
-async function prepare(env,id){
-  await ensure(env);const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p)throw new Error('Prospect not found.');
+async function prepare(env,tenant,id){
+  await ensure(env);const p=await env.DB.prepare('SELECT * FROM prospects WHERE tenant_id=? AND id=? LIMIT 1').bind(tenant.id,id).first();if(!p)throw new Error('Prospect not found.');
   const architecture=await compileConceptArchitecture(env,p),nextResearch=bridgeArchitectureIntoResearch(p,architecture);
-  await env.DB.prepare(`UPDATE prospects SET research_json=?,verified_business_profile_json=?,concept_strategy_json=?,concept_design_model_json=?,concept_image_plan_json=?,concept_architecture_version=?,concept_build_readiness=?,design_spec_json=?,design_spec_version=?,design_spec_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(JSON.stringify(nextResearch),JSON.stringify(architecture.profile),JSON.stringify(architecture.strategy),JSON.stringify(architecture.design_model),JSON.stringify(architecture.image_plan),architecture.architecture_version,architecture.build_readiness,JSON.stringify(architecture.strategy),architecture.architecture_version,id).run();
+  await env.DB.prepare(`UPDATE prospects SET research_json=?,verified_business_profile_json=?,concept_strategy_json=?,concept_design_model_json=?,concept_image_plan_json=?,concept_architecture_version=?,concept_build_readiness=?,design_spec_json=?,design_spec_version=?,design_spec_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?`).bind(JSON.stringify(nextResearch),JSON.stringify(architecture.profile),JSON.stringify(architecture.strategy),JSON.stringify(architecture.design_model),JSON.stringify(architecture.image_plan),architecture.architecture_version,architecture.build_readiness,JSON.stringify(architecture.strategy),architecture.architecture_version,tenant.id,id).run();
   try{await env.DB.prepare(`INSERT INTO admin_activity (customer_id,event_type,description,metadata_json,created_at) VALUES (NULL,'concept_architecture',?,?,CURRENT_TIMESTAMP)`).bind(`Compiled verified business profile and concept strategy for ${p.business_name}`,JSON.stringify({prospect_id:id,architecture_version:architecture.architecture_version,build_readiness:architecture.build_readiness,source:architecture.source,warning:architecture.warning||null,objective:architecture.strategy?.objective,image_roles:(architecture.image_plan?.roles||[]).map(x=>x.role)})).run()}catch{}
   return architecture;
 }
 
-async function buildGate(env,id){
-  const p=await env.DB.prepare('SELECT concept_state,concept_build_id,concept_url FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p||p.concept_state!=='Building')return null;
-  const b=p.concept_build_id?await env.DB.prepare('SELECT build_id,status,started_at FROM concept_builds WHERE build_id=? LIMIT 1').bind(p.concept_build_id).first():null,fresh=b?.started_at&&Date.parse(String(b.started_at).replace(' ','T')+'Z')>Date.now()-15*60*1000;
+async function buildGate(env,tenant,id){
+  const p=await env.DB.prepare('SELECT concept_state,concept_build_id,concept_url FROM prospects WHERE tenant_id=? AND id=? LIMIT 1').bind(tenant.id,id).first();if(!p||p.concept_state!=='Building')return null;
+  const b=p.concept_build_id?await env.DB.prepare('SELECT build_id,status,started_at FROM concept_builds WHERE tenant_id=? AND build_id=? LIMIT 1').bind(tenant.id,p.concept_build_id).first():null,fresh=b?.started_at&&Date.parse(String(b.started_at).replace(' ','T')+'Z')>Date.now()-15*60*1000;
   if(b&&ACTIVE.includes(b.status)&&fresh)return{blocked:true,build_id:b.build_id,status:b.status};
-  const message='Previous concept build stopped before completion and was released so a new build can start.';await env.DB.prepare(`UPDATE prospects SET concept_state=CASE WHEN COALESCE(concept_url,'')<>'' THEN 'Built' ELSE 'Build Failed' END,concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND concept_state='Building'`).bind(message,id).run();if(b?.build_id&&ACTIVE.includes(b.status))await env.DB.prepare(`UPDATE concept_builds SET status='Failed',completed_at=CURRENT_TIMESTAMP,error_stage='Interrupted',error_message=? WHERE build_id=?`).bind(message,b.build_id).run().catch(()=>{});return null;
+  const message='Previous concept build stopped before completion and was released so a new build can start.';await env.DB.prepare(`UPDATE prospects SET concept_state=CASE WHEN COALESCE(concept_url,'')<>'' THEN 'Built' ELSE 'Build Failed' END,concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=? AND concept_state='Building'`).bind(message,tenant.id,id).run();if(b?.build_id&&ACTIVE.includes(b.status))await env.DB.prepare(`UPDATE concept_builds SET status='Failed',completed_at=CURRENT_TIMESTAMP,error_stage='Interrupted',error_message=? WHERE tenant_id=? AND build_id=?`).bind(message,tenant.id,b.build_id).run().catch(()=>{});return null;
 }
 
 export default{async fetch(request,env,context){
   const url=new URL(request.url),preview=url.pathname.match(PREVIEW),chat=url.pathname.match(DESIGN_CHAT),m=url.pathname.match(BUILD);
-  if(preview&&request.method==='GET')return exactConceptPreview(request,env,context,Number(preview[1]),preview[2]||'');
-  if(chat&&request.method==='GET')return designChatWithExactPreview(request,env,context,Number(chat[1]));
+  const protectedId=preview?Number(preview[1]):chat?Number(chat[1]):m?Number(m[1]):null;
+  let tenant=null;
+  if(protectedId){
+    const user=await currentUser(request,env,context);if(!user)return json({ok:false,error:'Authentication required.'},401);
+    try{tenant=await resolveTenantContext(env,user);await requireTenantProspect(env,tenant,protectedId,'id')}
+    catch(error){if(error instanceof TenantAccessError)return json({ok:false,error:error.message},error.status);throw error}
+  }
+  if(preview&&request.method==='GET')return exactConceptPreview(request,env,context,tenant,Number(preview[1]),preview[2]||'');
+  if(chat&&request.method==='GET')return designChatWithExactPreview(request,env,context,tenant,Number(chat[1]));
+  if(chat)return appWorker.fetch(request,env,context);
   if(!(m&&request.method==='POST'&&env.DB))return appWorker.fetch(request,env,context);
-  const id=Number(m[1]),gate=await buildGate(env,id);if(gate?.blocked)return json({ok:false,error:`A concept build is already in progress (${gate.status}).`,build_id:gate.build_id,error_stage:gate.status,in_progress:true},409);
-  let architecture;try{architecture=await prepare(env,id)}catch(e){return json({ok:false,error:`Concept strategy failed: ${String(e?.message||e)}`},500)}
+  const id=Number(m[1]),gate=await buildGate(env,tenant,id);if(gate?.blocked)return json({ok:false,error:`A concept build is already in progress (${gate.status}).`,build_id:gate.build_id,error_stage:gate.status,in_progress:true},409);
+  let architecture;try{architecture=await prepare(env,tenant,id)}catch(e){return json({ok:false,error:`Concept strategy failed: ${String(e?.message||e)}`},500)}
   if(architecture.build_readiness!=='ready'){
     const identity=architecture.build_readiness==='needs_identity_review',message=identity?'Business identity needs review before a concept can be built.':'Business research needs more verified detail before a concept can be built.';
-    await env.DB.prepare(`UPDATE prospects SET concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(message,id).run().catch(()=>{});
+    await env.DB.prepare(`UPDATE prospects SET concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?`).bind(message,tenant.id,id).run().catch(()=>{});
     return json({ok:false,error:message,requires_review:true,review_type:identity?'identity':'research',build_readiness:architecture.build_readiness},409);
   }
   const response=await staticBuildWorker.fetch(request,env,context);
-  if(response.ok){try{const payload=await response.clone().json();if(payload?.build_id)await env.DB.prepare(`UPDATE concept_builds SET design_spec_json=?,design_spec_version=?,concept_strategy_json=?,concept_design_model_json=?,concept_image_plan_json=?,architecture_version=? WHERE build_id=?`).bind(JSON.stringify(architecture.strategy),ARCHITECTURE_VERSION,JSON.stringify(architecture.strategy),JSON.stringify(architecture.design_model),JSON.stringify(architecture.image_plan),ARCHITECTURE_VERSION,payload.build_id).run()}catch{}}
+  if(response.ok){try{const payload=await response.clone().json();if(payload?.build_id)await env.DB.prepare(`UPDATE concept_builds SET design_spec_json=?,design_spec_version=?,concept_strategy_json=?,concept_design_model_json=?,concept_image_plan_json=?,architecture_version=? WHERE tenant_id=? AND build_id=?`).bind(JSON.stringify(architecture.strategy),ARCHITECTURE_VERSION,JSON.stringify(architecture.strategy),JSON.stringify(architecture.design_model),JSON.stringify(architecture.image_plan),ARCHITECTURE_VERSION,tenant.id,payload.build_id).run()}catch{}}
   return response;
 }};
