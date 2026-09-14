@@ -8,6 +8,7 @@ const DNS_API='https://cajun-sites-dns.vercel.app/api/dns';
 const VERCEL_CONCEPT_PROJECT='cajun-sites-prospect-websites';
 const RESEARCH_MODEL='gpt-5.6-luna';
 const IMAGE_PIPELINE_VERSION='ai-image-v1';
+const VERCEL_STATIC_ROUTING=JSON.stringify({routes:[{handle:'filesystem'},{src:'/(.*)',dest:'/index.html'}]});
 
 function slugify(v){return clean(v,200).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/&/g,' and ').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').replace(/-{2,}/g,'-').slice(0,63)}
 function safeUrl(v){try{const u=new URL(String(v||''));return u.protocol==='https:'?u.toString():''}catch{return''}}
@@ -108,10 +109,13 @@ async function verifyImageAsset(role,response){
 async function verifyDeployment(baseUrl,html){
   if(!baseUrl)throw new Error('Vercel deployment URL was not available for verification.');
   if(!html.includes('/assets/hero.webp')||!html.includes('/assets/secondary.webp'))throw new Error('Concept packaging failed: generated HTML does not reference both local AI image assets.');
-  const [page,hero,secondary]=await Promise.all([fetch(`${baseUrl}/`),fetch(`${baseUrl}/assets/hero.webp`),fetch(`${baseUrl}/assets/secondary.webp`)]);
+  const [page,hero,secondary,manifestResponse]=await Promise.all([fetch(`${baseUrl}/`,{cache:'no-store'}),fetch(`${baseUrl}/assets/hero.webp`,{cache:'no-store'}),fetch(`${baseUrl}/assets/secondary.webp`,{cache:'no-store'}),fetch(`${baseUrl}/concept-manifest.json`,{cache:'no-store'})]);
   if(!page.ok)throw new Error(`Concept verification failed: index returned ${page.status}.`);
   const deployedHtml=await page.text();
   if(/images\.unsplash\.com|images\.pexels\.com|\/api\/images\//i.test(deployedHtml))throw new Error('Concept verification failed: an external legacy concept image URL remains in the deployed HTML.');
+  if(!manifestResponse.ok)throw new Error(`Concept verification failed: manifest returned ${manifestResponse.status}.`);
+  const manifestText=await manifestResponse.text();
+  try{JSON.parse(manifestText)}catch{throw new Error('Concept verification failed: manifest route returned non-JSON content, indicating static file routing was bypassed.')}
   await Promise.all([verifyImageAsset('hero',hero),verifyImageAsset('secondary',secondary)]);
 }
 
@@ -151,7 +155,8 @@ async function buildConcept(request,env,id){
       vercelUploadFile(env,'index.html',utf8Bytes(html),'text/html; charset=utf-8'),
       vercelUploadFile(env,'assets/hero.webp',bytesFromB64(aiImages.hero.generated.b64),'image/webp'),
       vercelUploadFile(env,'assets/secondary.webp',bytesFromB64(aiImages.secondary.generated.b64),'image/webp'),
-      vercelUploadFile(env,'concept-manifest.json',utf8Bytes(manifest),'application/json; charset=utf-8')
+      vercelUploadFile(env,'concept-manifest.json',utf8Bytes(manifest),'application/json; charset=utf-8'),
+      vercelUploadFile(env,'vercel.json',utf8Bytes(VERCEL_STATIC_ROUTING),'application/json; charset=utf-8')
     ]);
     await setBuildStatus(env,buildId,'Deploying');errorStage='Deploying';
     const dep=await vercelFetch(env,'/v13/deployments',{method:'POST',body:JSON.stringify({name:VERCEL_CONCEPT_PROJECT,project:VERCEL_CONCEPT_PROJECT,target:'production',files:fileRefs,projectSettings:{framework:null},meta:{cajunsites_prospect_id:String(id),cajunsites_build_id:buildId,cajunsites_slug:slug,cajunsites_visual_family:classification.family,cajunsites_visual_version:system.version,cajunsites_visual_variant:system.variant,cajunsites_image_provider:aiImages.provider,cajunsites_image_policy:aiImages.policy_id}})});
