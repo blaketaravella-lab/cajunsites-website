@@ -1,4 +1,5 @@
 import prospectCleanupWorker from './prospect-cleanup.js';
+import {identityCacheKey,isFresh,SOURCE_TTLS,sourcePlan} from './providers/business-data.js';
 
 const clean=(v,m=4000)=>String(v??'').trim().slice(0,m);
 const BUSINESS_FIELDS=['business_name','category','business_vertical','city','state','phone','email','address','business_summary','identity_confidence','google_rating','google_review_count','google_maps_url','verified_services_json','enrichment_sources_json'];
@@ -9,24 +10,7 @@ const DESIGN_PROFILE_KEYS=['archetype','mood','image_theme','headline','cta','se
 
 async function ensureSchema(env){
   if(!env.DB)return;
-  const alters=[
-    'ALTER TABLE prospects ADD COLUMN address TEXT',
-    'ALTER TABLE prospects ADD COLUMN business_summary TEXT',
-    'ALTER TABLE prospects ADD COLUMN identity_confidence TEXT',
-    'ALTER TABLE prospects ADD COLUMN google_rating REAL',
-    'ALTER TABLE prospects ADD COLUMN google_review_count INTEGER',
-    'ALTER TABLE prospects ADD COLUMN google_maps_url TEXT',
-    'ALTER TABLE prospects ADD COLUMN verified_services_json TEXT',
-    'ALTER TABLE prospects ADD COLUMN enrichment_sources_json TEXT',
-    'ALTER TABLE prospects ADD COLUMN enrichment_provenance_json TEXT',
-    'ALTER TABLE prospects ADD COLUMN enriched_at TEXT',
-    "ALTER TABLE prospects ADD COLUMN research_status TEXT NOT NULL DEFAULT 'Not Run'",
-    'ALTER TABLE prospects ADD COLUMN visual_inspiration_json TEXT',
-    'ALTER TABLE prospects ADD COLUMN visual_inspiration_at TEXT',
-    'ALTER TABLE prospects ADD COLUMN design_directives_json TEXT',
-    'ALTER TABLE prospects ADD COLUMN design_directives_updated_at TEXT'
-  ];
-  for(const sql of alters){try{await env.DB.prepare(sql).run()}catch(e){if(!/duplicate column|already exists/i.test(String(e?.message||e)))throw e}}
+  await env.DB.prepare('SELECT address,business_summary,identity_confidence,google_rating,google_review_count,google_maps_url,verified_services_json,enrichment_sources_json,enrichment_provenance_json,enriched_at,research_status,visual_inspiration_json,visual_inspiration_at,design_directives_json,design_directives_updated_at FROM prospects LIMIT 0').all();
 }
 
 function parseJson(v,fallback={}){try{return v?JSON.parse(v):fallback}catch{return fallback}}
@@ -92,6 +76,23 @@ async function enrichFromStoredResearch(env,id,before=null){
   await env.DB.prepare(`UPDATE prospects SET ${assignments.join(',')} WHERE id=?`).bind(...values).run();
 }
 
+async function usage(env,{prospectId,provider,operation,cacheHit=false,durationMs=null,usageData=null}){try{await env.DB.prepare(`INSERT INTO provider_usage_events (prospect_id,provider,operation,cache_hit,duration_ms,request_count,usage_json,created_at) VALUES (?,?,?,?,?,1,?,CURRENT_TIMESTAMP)`).bind(prospectId,provider,operation,cacheHit?1:0,durationMs,usageData?JSON.stringify(usageData):null).run()}catch{}}
+async function setJob(env,id,status,stage,error=null){try{await env.DB.prepare(`INSERT INTO platform_jobs (job_key,prospect_id,job_type,status,stage,attempts,last_error,started_at,completed_at,created_at,updated_at) VALUES (?,?,'prospect_automation',?,?,1,?,CASE WHEN ?='Running' THEN CURRENT_TIMESTAMP ELSE NULL END,CASE WHEN ? IN ('Complete','Failed') THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(job_key) DO UPDATE SET status=excluded.status,stage=excluded.stage,last_error=excluded.last_error,attempts=CASE WHEN excluded.status='Running' THEN platform_jobs.attempts+1 ELSE platform_jobs.attempts END,started_at=CASE WHEN excluded.status='Running' AND platform_jobs.started_at IS NULL THEN CURRENT_TIMESTAMP ELSE platform_jobs.started_at END,completed_at=CASE WHEN excluded.status IN ('Complete','Failed') THEN CURRENT_TIMESTAMP ELSE platform_jobs.completed_at END,updated_at=CURRENT_TIMESTAMP`).bind(`automation:${id}`,id,status,stage,error,status,status).run()}catch{}}
+
+async function loadCachedResearch(env,p){
+  try{const key=await identityCacheKey(p),row=await env.DB.prepare('SELECT payload_json,expires_at FROM research_cache WHERE cache_key=? AND expires_at>CURRENT_TIMESTAMP LIMIT 1').bind(key).first();return row?{key,research:parseJson(row.payload_json,null),expires_at:row.expires_at}:null}catch{return null}
+}
+async function storeResearchCache(env,p){
+  try{const research=parseJson(p.research_json,null);if(!research)return;const key=await identityCacheKey(p),sources=Array.isArray(research.sources)?research.sources.length:0,expires=new Date(Date.now()+SOURCE_TTLS.research_days*86400000).toISOString();await env.DB.prepare(`INSERT INTO research_cache (cache_key,business_name,city,state,phone,payload_json,identity_confidence,source_count,created_at,refreshed_at,expires_at) VALUES (?,?,?,?,?,?,?, ?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,identity_confidence=excluded.identity_confidence,source_count=excluded.source_count,refreshed_at=CURRENT_TIMESTAMP,expires_at=excluded.expires_at`).bind(key,p.business_name,p.city||null,p.state||null,p.phone||null,JSON.stringify(research),research.identity_confidence||null,sources,expires).run()}catch{}
+}
+async function applyCachedResearch(env,p,cached){
+  if(!cached?.research)return false;
+  await env.DB.prepare(`UPDATE prospects SET research_json=?,research_status='Complete',researched_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(JSON.stringify(cached.research),p.id).run();
+  await enrichFromStoredResearch(env,p.id,protectedSnapshot(p));
+  await usage(env,{prospectId:p.id,provider:'research_cache',operation:'business_research',cacheHit:true,usageData:{expires_at:cached.expires_at}});
+  return true;
+}
+
 function responseText(d){if(typeof d?.output_text==='string'&&d.output_text.trim())return d.output_text.trim();const a=[];for(const i of d?.output||[])for(const c of i?.content||[])if(c?.type==='output_text'&&c?.text)a.push(c.text);return a.join('\n').trim()}
 function parseJsonText(t){const r=String(t||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');const f=r.indexOf('{'),l=r.lastIndexOf('}');if(f<0||l<f)throw new Error('Visual inspiration response did not contain JSON.');return JSON.parse(r.slice(f,l+1))}
 function normalizeVisualInspiration(v,photoCount){const arr=(x,max=8,len=100)=>Array.isArray(x)?x.map(y=>clean(y,len)).filter(Boolean).slice(0,max):[];return{source:'google_places_photos',photo_count:photoCount,visual_mood:clean(v?.visual_mood,80)||null,environment:clean(v?.environment,220)||null,hero_direction:clean(v?.hero_direction,240)||null,brand_cues:arr(v?.brand_cues,8,100),dominant_colors:arr(v?.dominant_colors,6,40),materials:arr(v?.materials,8,80),subjects:arr(v?.subjects,8,100),avoid:arr(v?.avoid,8,120)}}
@@ -119,10 +120,13 @@ async function analyzePhotoInspiration(env,p,photoUris){
   return normalizeVisualInspiration(parseJsonText(responseText(data)),photoUris.length);
 }
 
-async function refreshVisualInspiration(env,id){
-  if(!env.DB||!(env.GOOGLE_PLACES_API_KEY||env.GOOGLE_MAPS_API_KEY)||!env.OPENAI_API_KEY)return null;
+async function refreshVisualInspiration(env,id,{force=false}={}){
+  if(!env.DB||!env.OPENAI_API_KEY)return null;
   const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p)return null;
-  const photoUris=await googlePhotoUris(env,p);if(!photoUris.length)return null;
+  if(!force&&isFresh(p.visual_inspiration_at,SOURCE_TTLS.visual_inspiration_days))return parseJson(p.visual_inspiration_json,null);
+  const plan=sourcePlan(p,{forceGoogle:force||env.GOOGLE_VISUALS_MODE==='always'});
+  if(!plan.google_places||!(env.GOOGLE_PLACES_API_KEY||env.GOOGLE_MAPS_API_KEY))return null;
+  const started=Date.now(),photoUris=await googlePhotoUris(env,p);if(!photoUris.length)return null;
   const inspiration=await analyzePhotoInspiration(env,p,photoUris);if(!inspiration)return null;
   const research=parseJson(p.research_json,{}),profile={...(research.design_profile||{})};
   if(inspiration.visual_mood)profile.mood=inspiration.visual_mood;
@@ -130,68 +134,60 @@ async function refreshVisualInspiration(env,id){
   const directives=parseJson(p.design_directives_json,null);if(directives&&typeof directives==='object'){for(const key of DESIGN_PROFILE_KEYS){if(directives[key]!==undefined)profile[key]=directives[key]}}
   const updatedResearch={...research,design_profile:profile,visual_inspiration:inspiration,design_profile_origin:directives?'design_studio':research.design_profile_origin};
   await env.DB.prepare('UPDATE prospects SET research_json=?,visual_inspiration_json=?,visual_inspiration_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(JSON.stringify(updatedResearch),JSON.stringify(inspiration),id).run();
+  await usage(env,{prospectId:id,provider:'google_places',operation:'visual_inspiration',durationMs:Date.now()-started,usageData:{photo_count:photoUris.length,reason:plan.reason}});
   return inspiration;
 }
 
 async function readJsonClone(request){try{return await request.clone().json()}catch{return null}}
-
-function internalPostRequest(request,path){
-  const url=new URL(request.url);url.pathname=path;url.search='';
-  const headers=new Headers({'content-type':'application/json'});
-  const cookie=request.headers.get('cookie');if(cookie)headers.set('cookie',cookie);
-  headers.set('origin',url.origin);
-  return new Request(url.toString(),{method:'POST',headers,body:'{}'});
-}
-
+function internalPostRequest(request,path){const url=new URL(request.url);url.pathname=path;url.search='';const headers=new Headers({'content-type':'application/json'});const cookie=request.headers.get('cookie');if(cookie)headers.set('cookie',cookie);headers.set('origin',url.origin);return new Request(url.toString(),{method:'POST',headers,body:'{}'})}
 async function recordAutomationFailure(env,id,field,message){await env.DB.prepare(`UPDATE prospects SET ${field}=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(clean(message,1000),id).run().catch(()=>{})}
 
+async function ensureResearch(worker,request,env,context,id){
+  const p=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(!p||p.research_status==='Complete')return true;
+  const cached=await loadCachedResearch(env,p);if(cached&&await applyCachedResearch(env,p,cached))return true;
+  const started=Date.now(),researchResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/research`),env,context);
+  if(researchResponse.ok){const refreshed=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(refreshed)await storeResearchCache(env,refreshed);await usage(env,{prospectId:id,provider:'openai',operation:'business_research',durationMs:Date.now()-started});return true}
+  return false;
+}
+
 async function prepareConceptBuild(worker,request,env,context,id){
-  try{
-    const row=await env.DB.prepare('SELECT research_status FROM prospects WHERE id=? LIMIT 1').bind(id).first();
-    if(row&&row.research_status!=='Complete'&&env.OPENAI_API_KEY){const researchResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/research`),env,context);if(!researchResponse.ok)console.warn('Pre-build research did not complete; concept builder will apply its normal fallback',{prospectId:id,status:researchResponse.status})}
-    await refreshVisualInspiration(env,id);
-  }catch(error){console.warn('Google photo visual inspiration skipped',{prospectId:id,error:clean(error?.message||error,500)})}
+  try{await ensureResearch(worker,request,env,context,id);await refreshVisualInspiration(env,id)}catch(error){console.warn('Optional visual enrichment skipped',{prospectId:id,error:clean(error?.message||error,500)})}
 }
 
 async function queueAutoResearchAndBuild(worker,request,env,context,id){
-  await ensureSchema(env);
-  await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+  await ensureSchema(env);await env.DB.prepare("UPDATE prospects SET research_status='Queued',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();await setJob(env,id,'Queued','Research');
   const task=(async()=>{
     try{
-      const researchResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/research`),env,context);
-      if(!researchResponse.ok){const payload=await researchResponse.clone().json().catch(()=>({}));const message=clean(payload?.error||`Automatic research request failed (${researchResponse.status})`,1000);await recordAutomationFailure(env,id,'research_error',message);console.error('Automatic prospect research failed',{prospectId:id,error:message});return}
+      await setJob(env,id,'Running','Research');
+      const researchOk=await ensureResearch(worker,request,env,context,id);
+      if(!researchOk){const message='Automatic research did not complete.';await recordAutomationFailure(env,id,'research_error',message);await setJob(env,id,'Failed','Research',message);return}
+      await setJob(env,id,'Running','Concept Build');
       const buildResponse=await worker.fetch(internalPostRequest(request,`/api/admin/prospects/${id}/build-concept`),env,context);
-      if(!buildResponse.ok){const payload=await buildResponse.clone().json().catch(()=>({}));const message=clean(payload?.error||`Automatic concept build failed (${buildResponse.status})`,1000);console.error('Automatic concept build failed',{prospectId:id,error:message})}
-    }catch(error){const message=clean(error?.message||error,1000);await recordAutomationFailure(env,id,'research_error',message);console.error('Automatic prospect workflow failed',{prospectId:id,error:message})}
+      if(!buildResponse.ok){const payload=await buildResponse.clone().json().catch(()=>({}));const message=clean(payload?.error||`Automatic concept build failed (${buildResponse.status})`,1000);await setJob(env,id,'Failed','Concept Build',message);console.error('Automatic concept build failed',{prospectId:id,error:message});return}
+      await setJob(env,id,'Complete','Deployed');
+    }catch(error){const message=clean(error?.message||error,1000);await recordAutomationFailure(env,id,'research_error',message);await setJob(env,id,'Failed','Automation',message);console.error('Automatic prospect workflow failed',{prospectId:id,error:message})}
   })();
   if(context?.waitUntil)context.waitUntil(task);else await task;
 }
 
 const worker={
   async fetch(request,env,context){
-    const url=new URL(request.url);
-    if(!env.DB)return prospectCleanupWorker.fetch(request,env,context);
-    await ensureSchema(env);
-
+    const url=new URL(request.url);if(!env.DB)return prospectCleanupWorker.fetch(request,env,context);await ensureSchema(env);
     let data=null,before=null,id=null;
     const researchMatch=url.pathname.match(RESEARCH_MUTATION_RE),prospectMatch=url.pathname.match(PROSPECT_MUTATION_RE);
     const isCreate=url.pathname==='/api/admin/prospects'&&request.method==='POST';
     const isManualUpdate=prospectMatch&&request.method==='PATCH';
     const isResearchMutation=researchMatch&&researchMatch[2]==='research'&&request.method==='POST';
     const isConceptBuild=researchMatch&&researchMatch[2]==='build-concept'&&request.method==='POST';
-
     if(isCreate||isManualUpdate)data=await readJsonClone(request);
     if(isManualUpdate)id=Number(prospectMatch[1]);
     if(isResearchMutation){id=Number(researchMatch[1]);const row=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(row)before=protectedSnapshot(row)}
     if(isConceptBuild){id=Number(researchMatch[1]);await prepareConceptBuild(worker,request,env,context,id)}
-
-    const response=await prospectCleanupWorker.fetch(request,env,context);
-    if(!response.ok)return response;
-
+    const response=await prospectCleanupWorker.fetch(request,env,context);if(!response.ok)return response;
     try{
       if(isCreate){const payload=await response.clone().json();if(payload?.id){id=Number(payload.id);await markManualFields(env,id,data);await queueAutoResearchAndBuild(worker,request,env,context,id)}}
       if(isManualUpdate)await markManualFields(env,id,data);
-      if(isResearchMutation)await enrichFromStoredResearch(env,id,before);
+      if(isResearchMutation){await enrichFromStoredResearch(env,id,before);const row=await env.DB.prepare('SELECT * FROM prospects WHERE id=? LIMIT 1').bind(id).first();if(row)await storeResearchCache(env,row)}
     }catch(error){console.error('Prospect enrichment post-processing failed',error)}
     return response;
   }
