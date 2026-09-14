@@ -36,7 +36,7 @@ assert.match(repairedHtml,/rel="preload" as="image" href="\/assets\/secondary\.w
 
 const pipeline=fs.readFileSync('worker/image-pipeline/ai-image-pipeline.js','utf8');
 const provider=fs.readFileSync('worker/providers/image-generation.js','utf8');
-const concept=fs.readFileSync('worker/concept-factory.js','utf8');
+const concept=fs.readFileSync('worker/concept-factory-v2.js','utf8');
 const designWorker=fs.readFileSync('worker/concept-design-worker.js','utf8');
 const staleRecovery=fs.readFileSync('worker/stale-build-recovery.js','utf8');
 const reliabilityWorker=fs.readFileSync('worker/reliability-hotfix.js','utf8');
@@ -66,10 +66,14 @@ assert.match(concept,/x-vercel-digest/,'Vercel file uploads must be content-addr
 assert.match(concept,/concept-manifest\.json/,'Each concept deployment must include a manifest.');
 assert.match(concept,/verifyDeployment/,'Concept deployments must be verified before activation.');
 assert.ok(concept.indexOf('await verifyDeployment')<concept.indexOf('await assignAlias'),'Deployment verification must happen before alias activation.');
+assert.doesNotMatch(concept,/vercelUploadFile\(env,'vercel\.json'/,'Static v2 deployments must not install a catch-all Vercel rewrite.');
+assert.match(concept,/\/v6\/deployments\/\$\{encodeURIComponent\(deploymentId\)\}\/files/,'Static v2 deployments must verify the Vercel deployment file tree.');
+assert.match(concept,/fetchRetry/,'Static v2 verification must retry during edge propagation.');
 assert.match(concept,/env\.DB\.batch/,'Current concept state and deployment metadata must be committed atomically in D1.');
 assert.match(concept,/previous_deployment_id/,'Build history must retain the prior deployment for rollback.');
 assert.match(concept,/assignAlias\(env,oldDeploymentId,alias\)/,'Alias activation failure after a move must support rollback to the old deployment.');
 assert.match(concept,/if\(p\.customer_id\)/,'Converted prospects must not rebuild prospect concepts.');
+assert.match(designWorker,/import staticBuildWorker from '\.\/concept-factory-v2\.js'/,'The top-level Concept Design Worker must route builds through the static v2 deployer.');
 assert.match(migration,/concept_builds/,'Canonical migration must retain build history.');
 assert.match(migration,/asset_path/,'Canonical image metadata must store deployment-local asset paths.');
 assert.match(migration,/concept_build_id/,'Prospects must reference their current concept build.');
@@ -77,6 +81,6 @@ assert.doesNotMatch(wrangler,/IMAGE_ASSETS|r2_buckets/,'Worker configuration mus
 const directHardening=designWorker.includes("import appWorker from './platform-hardening.js'");
 const reliabilityHardening=designWorker.includes("import appWorker from './reliability-hotfix.js'")&&reliabilityWorker.includes("import appWorker from './platform-hardening.js'");
 const staleRecoveryHardening=designWorker.includes("import appWorker from './stale-build-recovery.js'")&&staleRecovery.includes("import appWorker from './reliability-hotfix.js'")&&reliabilityWorker.includes("import appWorker from './platform-hardening.js'");
-assert.ok(/"main": "\.\/worker\/platform-hardening\.js"/.test(wrangler)||(/"main": "\.\/worker\/concept-design-worker\.js"/.test(wrangler)&&(directHardening||reliabilityHardening||staleRecoveryHardening)),'Platform hardening must remain in the top-level Worker chain.');
+assert.ok(/"main": "\.\/worker\/platform-hardening\.js"/.test(wrangler)||(/"main": "\.\/worker\/concept-design-worker\.js"/.test(wrangler)&&(directHardening||reliabilityHardening||staleRecoveryHardening)),'Platform hardening must remain available in the top-level Worker chain for non-build routes.');
 
 console.log('AI image pipeline invariants passed.');
