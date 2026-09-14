@@ -1,4 +1,4 @@
-import appWorker from './design-chat.js';
+import appWorker from './platform-hardening.js';
 import { resolveDesignSpec, designSpecSummary } from './design-intelligence.js';
 const BUILD=/^\/api\/admin\/prospects\/(\d+)\/build-concept$/;
 const json=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
