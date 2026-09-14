@@ -49,11 +49,11 @@ must(enrichment.includes('skipHttpRedirect=true'),'Google Place photos must be t
 must(enrichment.includes('Do not copy, reproduce, trace, crop, embed, or otherwise reuse any source photo'),'Visual analysis must prohibit copying source photos.');
 must(staleRecovery.includes("p.concept_state='Building'")&&staleRecovery.includes('STALE_MINUTES=15'),'Interrupted concept builds must self-heal instead of remaining Building forever.');
 
-must(designChat.includes('a tightly constrained website-design assistant'),'Design Studio must use an explicit website-design-only system boundary.');
-must(designChat.includes('You have no tools, no code execution, no filesystem, no database access'),'Design Studio prompt must deny tool, code, filesystem, and database capabilities.');
-must(designChat.includes('Never output HTML, CSS, JavaScript'),'Design Studio must prohibit code generation.');
+must(designChat.includes('You are CajunSites Design Studio')&&designChat.includes('You edit ONLY'),'Design Studio must use an explicit website-design-only system boundary.');
+must(designChat.includes('Never change CajunSites admin'),'Design Studio must explicitly prohibit admin/platform mutations.');
+must(designChat.includes('Never invent services, products, credentials'),'Design Studio must preserve verified business truth.');
 must(!designChat.includes("tools:[")&&!designChat.includes('tools: ['),'Design Studio model calls must not expose OpenAI tools.');
-must(designChat.includes("const PROFILE_KEYS=['archetype','mood','image_theme','headline','cta','sections','process']"),'Design Studio must use an explicit design-field allowlist.');
+must(designChat.includes('const PROFILE_KEYS=')&&designChat.includes("'concept_design_model_json'")&&designChat.includes("'services_presentation'")&&designChat.includes("'imagery_strategy'"),'Design Studio must use the structured design-model field allowlist.');
 must(designChat.includes('normalizeProposal'),'Every AI design proposal must be normalized through the allowlist.');
 must(designChat.includes("role='assistant'")&&designChat.includes('proposal_json'),'Only stored assistant proposals may be applied.');
 must(designChat.includes("p.research_status!=='Complete'"),'Design Studio must require completed research before applying a design.');
