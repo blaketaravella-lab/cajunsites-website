@@ -1,7 +1,6 @@
-/* Final sidebar composition.
-   Section headings are intentionally removed from the rendered sidebar.
-   Group separation is handled with whitespace and subtle dividers so labels
-   can never collide with navigation rows at any viewport height or zoom. */
+/* Final stable sidebar composition.
+   Groups use explicit grid rows so section labels and page links can never
+   occupy the same vertical space, regardless of viewport height or zoom. */
 
 body.cs-admin .sidebar {
   display: flex !important;
@@ -11,38 +10,63 @@ body.cs-admin .sidebar {
 }
 
 body.cs-admin .sidebar > .nav-group {
-  display: block !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  align-content: start !important;
   position: static !important;
   flex: 0 0 auto !important;
   width: 100% !important;
   height: auto !important;
-  min-height: 0 !important;
-  margin: 0 !important;
+  min-height: max-content !important;
+  margin: 0 0 12px !important;
   padding: 0 !important;
   overflow: visible !important;
 }
 
-/* Remove the failure-prone label row entirely. Navigation grouping remains
-   clear through spacing and dividers, while link rows stay unambiguous. */
-body.cs-admin .sidebar > .nav-group > .nav-group-label {
-  display: none !important;
+body.cs-admin .sidebar > .nav-group:first-of-type {
+  margin-bottom: 16px !important;
+  padding-bottom: 14px !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
 }
 
 body.cs-admin .sidebar > .nav-group + .nav-group {
-  margin-top: 10px !important;
-  padding-top: 10px !important;
-  border-top: 1px solid rgba(255,255,255,.10) !important;
+  margin-top: 0 !important;
 }
 
-body.cs-admin .sidebar > .nav-group:nth-of-type(2) {
-  margin-top: 6px !important;
+body.cs-admin .sidebar > .nav-group > .nav-group-label {
+  display: block !important;
+  position: static !important;
+  grid-row: 1 !important;
+  width: 100% !important;
+  min-height: 20px !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 3px 10px 7px !important;
+  line-height: 1.2 !important;
+  color: #b9abc3 !important;
+  font-size: .64rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+}
+
+body.cs-admin .sidebar > .nav-group:first-of-type > .nav-group-label:empty {
+  display: none !important;
 }
 
 body.cs-admin .sidebar > .nav-group > .nav {
-  display: flex !important;
-  flex-direction: column !important;
+  grid-row: 2 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: minmax(40px, auto) !important;
+  align-items: stretch !important;
   position: static !important;
   width: 100% !important;
+  height: auto !important;
   margin: 0 !important;
   padding: 0 !important;
   gap: 3px !important;
@@ -52,15 +76,19 @@ body.cs-admin .sidebar > .nav-group > .nav > a {
   position: static !important;
   display: flex !important;
   align-items: center !important;
-  flex: 0 0 auto !important;
+  align-self: stretch !important;
+  flex: none !important;
   width: 100% !important;
   min-width: 0 !important;
   min-height: 40px !important;
-  height: auto !important;
+  height: 40px !important;
   margin: 0 !important;
-  padding-top: 8px !important;
-  padding-bottom: 8px !important;
+  padding: 0 10px !important;
   line-height: 1.2 !important;
+}
+
+body.cs-admin .sidebar > .nav-group > .nav > a[hidden] {
+  display: none !important;
 }
 
 body.cs-admin .sidebar > .nav-group > .nav > a > span:last-child {
@@ -75,12 +103,10 @@ body.cs-admin .sidebar .foot {
   position: static !important;
   flex: 0 0 auto !important;
   margin-top: auto !important;
-  padding-top: 18px !important;
+  padding: 18px 10px 0 !important;
 }
 
 @media (max-width: 900px) {
-  body.cs-admin .sidebar > .nav-group + .nav-group {
-    margin-top: 8px !important;
-    padding-top: 8px !important;
-  }
+  body.cs-admin .sidebar > .nav-group { margin-bottom: 10px !important; }
+  body.cs-admin .sidebar > .nav-group > .nav-group-label { padding-top: 5px !important; }
 }
