@@ -6,4 +6,7 @@ if(source.includes("asset is not served as an image")) throw new Error('Deployme
 if(!source.includes('function isWebp(bytes)')) throw new Error('Deployment verification must inspect WebP file signatures.');
 if(!source.includes('new Uint8Array(await response.arrayBuffer())')) throw new Error('Deployment verification must inspect deployed asset bytes.');
 if(!source.includes('asset did not return valid WebP image bytes')) throw new Error('Deployment verification must reject non-WebP payloads with a diagnostic error.');
+if(!source.includes("vercelUploadFile(env,'vercel.json'")) throw new Error('Concept deployments must package a deployment-local vercel.json.');
+if(!source.includes("handle:'filesystem'")) throw new Error('Concept routing must prioritize deployed static files before the index fallback.');
+if(!source.includes('manifest route returned non-JSON content')) throw new Error('Verification must detect when Vercel rewrites static files to HTML.');
 console.log('Concept verification invariants passed.');
