@@ -31,6 +31,8 @@ jobs:
         run: node worker/design-intelligence.test.mjs
       - name: Test Concept Architecture Invariants
         run: node worker/concept-architecture.test.mjs
+      - name: Test Tenant Isolation Invariants
+        run: node worker/tenant-isolation.test.mjs
       - name: Test Platform Invariants
         run: node worker/platform-invariants.test.mjs
       - name: Test Mobile Responsiveness Invariants
