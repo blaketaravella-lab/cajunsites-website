@@ -98,6 +98,13 @@ async function deleteAlias(env,alias){try{await vercelFetch(env,`/v2/aliases/${e
 async function deleteOldDeployment(env,id){if(!id)return;try{await vercelFetch(env,`/v13/deployments/${encodeURIComponent(id)}`,{method:'DELETE'})}catch(e){console.warn('Old concept deployment cleanup failed',String(e?.message||e))}}
 function readResearch(p){try{return p.research_json?JSON.parse(p.research_json):null}catch{return null}}
 
+function isWebp(bytes){return bytes.length>=12&&bytes[0]===0x52&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x46&&bytes[8]===0x57&&bytes[9]===0x45&&bytes[10]===0x42&&bytes[11]===0x50}
+async function verifyImageAsset(role,response){
+  if(!response.ok)throw new Error(`Concept verification failed: ${role} image returned ${response.status}.`);
+  const contentType=String(response.headers.get('content-type')||'').toLowerCase();
+  const bytes=new Uint8Array(await response.arrayBuffer());
+  if(!isWebp(bytes))throw new Error(`Concept verification failed: ${role} asset did not return valid WebP image bytes${contentType?` (content-type ${contentType})`:''}.`);
+}
 async function verifyDeployment(baseUrl,html){
   if(!baseUrl)throw new Error('Vercel deployment URL was not available for verification.');
   if(!html.includes('/assets/hero.webp')||!html.includes('/assets/secondary.webp'))throw new Error('Concept packaging failed: generated HTML does not reference both local AI image assets.');
@@ -105,7 +112,7 @@ async function verifyDeployment(baseUrl,html){
   if(!page.ok)throw new Error(`Concept verification failed: index returned ${page.status}.`);
   const deployedHtml=await page.text();
   if(/images\.unsplash\.com|images\.pexels\.com|\/api\/images\//i.test(deployedHtml))throw new Error('Concept verification failed: an external legacy concept image URL remains in the deployed HTML.');
-  for(const [role,r] of [['hero',hero],['secondary',secondary]]){if(!r.ok)throw new Error(`Concept verification failed: ${role} image returned ${r.status}.`);if(!String(r.headers.get('content-type')||'').toLowerCase().startsWith('image/'))throw new Error(`Concept verification failed: ${role} asset is not served as an image.`)}
+  await Promise.all([verifyImageAsset('hero',hero),verifyImageAsset('secondary',secondary)]);
 }
 
 async function setBuildStatus(env,buildId,status,fields={}){
