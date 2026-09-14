@@ -9,10 +9,15 @@ body.cs-admin .pw-summary{max-width:900px;margin:12px 0 0;color:var(--cs-neutral
 body.cs-admin .pw-status{min-width:220px;display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px 18px;background:#fff;border:1px solid var(--cs-border-subtle,#ebe8ed);border-radius:12px}
 body.cs-admin .pw-status-item{display:grid;gap:6px;align-content:start}.pw-label{color:var(--cs-neutral-500,#8b8490);font-size:.68rem;font-weight:600}.pw-value{color:var(--cs-neutral-900,#242126);font-size:.78rem;font-weight:600;line-height:1.4}
 body.cs-admin .pw-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:#fff;border:1px solid var(--cs-border-subtle,#ebe8ed);border-radius:12px;box-shadow:0 1px 2px rgba(24,21,27,.04)}
+body.cs-admin .pw-actions #researchBusinessTop{order:1;background:var(--cs-purple-900,#2d0b50)!important;border-color:var(--cs-purple-900,#2d0b50)!important;color:#fff!important}
+body.cs-admin .pw-actions #buildConcept{order:2;background:#fff!important;border-color:var(--cs-purple-300,#bfa7d3)!important;color:var(--cs-purple-900,#2d0b50)!important}
+body.cs-admin .pw-actions a[href*="cajunsites.com"]{order:3}
+body.cs-admin .pw-actions #convertCustomer,body.cs-admin .pw-actions a[href^="/admin/?customer="]{order:4}
+body.cs-admin .pw-actions .pw-primary-note{order:5}
+body.cs-admin #researchBusiness{display:none!important}
 body.cs-admin .pw-actions .admin-action{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:42px!important;padding:0 16px!important;border:1px solid var(--cs-border,#d8d2dc)!important;border-radius:8px!important;background:#fff!important;color:var(--cs-purple-900,#2d0b50)!important;font-size:.78rem!important;font-weight:700!important;text-decoration:none!important;cursor:pointer!important;box-shadow:0 1px 2px rgba(24,21,27,.05)!important;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease,background .15s ease}
 body.cs-admin .pw-actions .admin-action:hover:not(:disabled){border-color:var(--cs-purple-400,#9d79bf)!important;box-shadow:0 3px 8px rgba(45,11,80,.10)!important;transform:translateY(-1px)}
 body.cs-admin .pw-actions .admin-action:focus-visible{outline:3px solid rgba(240,183,25,.32)!important;outline-offset:2px}
-body.cs-admin .pw-actions .admin-action.purple{background:var(--cs-purple-900,#2d0b50)!important;border-color:var(--cs-purple-900,#2d0b50)!important;color:#fff!important}
 body.cs-admin .pw-actions .admin-action.primary{background:var(--cs-gold-500,#f0b719)!important;border-color:var(--cs-gold-600,#d9a30f)!important;color:var(--cs-neutral-950,#18151b)!important}
 body.cs-admin .pw-actions .admin-action:disabled{opacity:.48!important;cursor:not-allowed!important;box-shadow:none!important;transform:none!important}
 body.cs-admin .pw-primary-note{color:var(--cs-neutral-500,#8b8490);font-size:.72rem;margin-left:auto}
