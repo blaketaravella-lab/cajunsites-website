@@ -20,6 +20,7 @@ assert.match(conversion,/Hosting & Maintenance/,'Recurring subscription must des
 assert.match(conversion,/recurring\]\[interval\].*month/,'Hosting must recur monthly.');
 assert.match(conversion,/launch_invoice_failed/,'Invoice delivery failures must be observable without destroying the promoted customer site.');
 assert.match(conversion,/hosting_subscription_failed/,'Recurring billing setup failures must be observable.');
-assert.match(concept,/if\(p\.customer_id\)/,'Converted prospects must not be rebuilt through the prospect concept pipeline.');
+assert.match(concept,/const customerId=Number\(p\.customer_id\|\|0\)/,'Customer production builds must be explicitly distinguished from prospect concepts.');
+assert.match(concept,/\$\{slug\}-review/,'Customer rebuilds must target a production review alias.');
 
 console.log('Customer lifecycle invariants passed.');
