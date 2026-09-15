@@ -1,4 +1,4 @@
-import appWorker from './reliability-hotfix.js';
+import appWorker from './customer-assets.js';
 
 const STALE_MINUTES=15;
 const ACTIVE_STATUSES=['Preparing','Generating Images','Packaging','Deploying','Verifying','Activating','Committing'];
