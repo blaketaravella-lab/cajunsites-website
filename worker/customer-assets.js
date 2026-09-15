@@ -1,4 +1,4 @@
-import baseWorker from './stale-build-recovery.js';
+import baseWorker from './reliability-hotfix.js';
 
 const ADMIN_COOKIE='cajunsites_admin';
 const MAX_FILE_BYTES=10*1024*1024;
