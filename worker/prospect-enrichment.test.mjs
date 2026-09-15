@@ -8,6 +8,7 @@ const prospectPage=fs.readFileSync('src/pages/admin/prospect.astro','utf8');
 const hardening=fs.readFileSync('worker/platform-hardening.js','utf8');
 const reliability=fs.readFileSync('worker/reliability-hotfix.js','utf8');
 const staleRecovery=fs.readFileSync('worker/stale-build-recovery.js','utf8');
+const customerAssets=fs.readFileSync('worker/customer-assets.js','utf8');
 const conceptDesign=fs.readFileSync('worker/concept-design-worker.js','utf8');
 const sourceRouter=fs.readFileSync('worker/providers/business-data.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
@@ -24,7 +25,7 @@ const designChatWrapsBilling=wrangler.includes('"main": "./worker/design-chat.js
 const hardeningWrapsDesign=wrangler.includes('"main": "./worker/platform-hardening.js"')&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
 const conceptDesignWrapsHardening=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
 const conceptDesignWrapsReliability=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './reliability-hotfix.js'")&&reliability.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
-const conceptDesignWrapsStaleRecovery=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './stale-build-recovery.js'")&&staleRecovery.includes("import appWorker from './reliability-hotfix.js'")&&reliability.includes("import appWorker from './platform-hardening.js'")&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
+const conceptDesignWrapsStaleRecovery=wrangler.includes('"main": "./worker/concept-design-worker.js"')&&conceptDesign.includes("import appWorker from './stale-build-recovery.js'")&&((staleRecovery.includes("import appWorker from './reliability-hotfix.js'")&&reliability.includes("import appWorker from './platform-hardening.js'"))||(staleRecovery.includes("import appWorker from './customer-assets.js'")&&customerAssets.includes("import baseWorker from './reliability-hotfix.js'")&&reliability.includes("import appWorker from './platform-hardening.js'")))&&hardening.includes("import appWorker from './design-chat.js'")&&designChat.includes("import appWorker from './billing.js'")&&billing.includes("import appWorker from './prospect-enrichment.js'");
 must(enrichmentIsTopLevel||billingWrapsEnrichment||designChatWrapsBilling||hardeningWrapsDesign||conceptDesignWrapsHardening||conceptDesignWrapsReliability||conceptDesignWrapsStaleRecovery,'Prospect enrichment must remain in the top-level Worker chain.');
 must(enrichment.includes("origin:'manual'"),'Manual edits must be recorded in field provenance.');
 must(enrichment.includes("'manual_existing'"),'Legacy non-empty values must be protected from research overwrite.');
@@ -71,6 +72,7 @@ must(hardening.includes('billing_snapshots'),'Actual billing facts must be synch
 must(hardening.includes('provider_usage_events'),'Provider/API usage must be observable.');
 must(hardening.includes('platform_jobs'),'Long-running operations must expose job state.');
 must(hardeningMigration.includes('research_cache')&&hardeningMigration.includes('billing_snapshots')&&hardeningMigration.includes('provider_usage_events'),'Platform hardening must have a canonical migration.');
-must(!wrangler.includes('IMAGE_ASSETS')&&!wrangler.includes('r2_buckets'),'Concept AI imagery must not depend on Cloudflare R2.');
+must(!wrangler.includes('IMAGE_ASSETS'),'Concept AI imagery must not depend on the retired IMAGE_ASSETS binding.');
+must(wrangler.includes('CUSTOMER_ASSETS'),'Customer-provided production assets must use isolated private storage.');
 
 console.log('Prospect enrichment, Design Studio, platform hardening, and stale build recovery invariants passed.');

@@ -52,6 +52,11 @@ import '../styles/global.css';
 <div class="full"><h2>Logo, Photos &amp; Brand Assets</h2></div>
 <div class="full"><label for="logo_link">Logo / brand files share link</label><input id="logo_link" name="logo_link" type="url" placeholder="Google Drive, Dropbox, OneDrive, iCloud, etc." /></div>
 <div class="full"><label for="photos_link">Business photos share link</label><input id="photos_link" name="photos_link" type="url" placeholder="Share a folder containing your preferred photos." /></div>
+<div class="full" style="padding:1rem;border:1px dashed #bda9c9;border-radius:.75rem;background:#fbf8fd">
+  <label for="customer_photos">Or upload photos directly</label>
+  <input id="customer_photos" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+  <p class="microcopy">JPG, PNG, or WebP. Up to 10 MB each. We prepare a web-ready copy and keep it private until CajunSites approves it for your website.</p>
+</div>
 <div class="full"><label for="photo_notes">Photo notes</label><textarea id="photo_notes" name="photo_notes" placeholder="Tell us which photos are most important or where certain photos should be used."></textarea></div>
 
 <div class="full"><h2>Social Profiles &amp; Google Business Profile</h2></div>
@@ -92,6 +97,42 @@ const onboardingTokenField = document.getElementById('onboarding_token');
 const params = new URLSearchParams(window.location.search);
 const checkoutSessionId = params.get('session') || '';
 const onboardingToken = params.get('token') || '';
+const customerPhotos = document.getElementById('customer_photos');
+
+async function normalizeImage(file) {
+  if (!file.type.startsWith('image/')) throw new Error('Please choose image files only.');
+  const bitmap = await createImageBitmap(file);
+  const max = 2400;
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', .88));
+  if (!blob) throw new Error('One of your photos could not be prepared.');
+  return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' });
+}
+
+async function uploadCustomerPhotos() {
+  const files = [...(customerPhotos?.files || [])];
+  let uploaded = 0;
+  for (const source of files) {
+    status.textContent = `Preparing photo ${uploaded + 1} of ${files.length}...`;
+    const file = await normalizeImage(source);
+    if (file.size > 10 * 1024 * 1024) throw new Error(`${source.name} is too large. Please use a smaller image.`);
+    const body = new FormData();
+    body.set('checkout_session_id', checkoutSessionField.value);
+    body.set('onboarding_token', onboardingTokenField.value);
+    body.set('file', file);
+    body.set('role', 'gallery');
+    const response = await fetch('/api/onboarding/assets', { method: 'POST', body, headers: { 'Accept': 'application/json' } });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `We could not upload ${source.name}.`);
+    uploaded += 1;
+  }
+  return uploaded;
+}
 
 if (checkoutSessionField) checkoutSessionField.value = checkoutSessionId;
 if (onboardingTokenField) onboardingTokenField.value = onboardingToken;
@@ -114,9 +155,12 @@ form?.addEventListener('submit', async (event) => {
     const response = await fetch('/api/onboarding', { method: 'POST', body: new FormData(form), headers: { 'Accept': 'application/json' } });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) throw new Error(result.error || 'Unable to submit onboarding information.');
+    const photoCount = await uploadCustomerPhotos();
     form.reset();
     if (window.turnstile) window.turnstile.reset();
-    status.textContent = 'Thanks! We received your onboarding information and will review it next.';
+    status.textContent = photoCount
+      ? `Thanks! We received your information and ${photoCount} photo${photoCount === 1 ? '' : 's'}.`
+      : 'Thanks! We received your onboarding information and will review it next.';
     button.textContent = 'Information Submitted';
   } catch (error) {
     if (window.turnstile) window.turnstile.reset();

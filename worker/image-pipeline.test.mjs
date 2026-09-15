@@ -59,6 +59,7 @@ const provider=fs.readFileSync('worker/providers/image-generation.js','utf8');
 const concept=fs.readFileSync('worker/concept-factory-v2.js','utf8');
 const designWorker=fs.readFileSync('worker/concept-design-worker.js','utf8');
 const staleRecovery=fs.readFileSync('worker/stale-build-recovery.js','utf8');
+const customerAssets=fs.readFileSync('worker/customer-assets.js','utf8');
 const reliabilityWorker=fs.readFileSync('worker/reliability-hotfix.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const migration=fs.readFileSync('migrations/0013_ai_image_pipeline.sql','utf8');
@@ -97,15 +98,17 @@ assert.match(concept,/sha1Hex/,'Stored deployment verification must compare cont
 assert.match(concept,/env\.DB\.batch/,'Current concept state and deployment metadata must be committed atomically in D1.');
 assert.match(concept,/previous_deployment_id/,'Build history must retain the prior deployment for rollback.');
 assert.match(concept,/assignAlias\(env,oldDeploymentId,alias\)/,'Alias activation failure after a move must support rollback to the old deployment.');
-assert.match(concept,/if\(p\.customer_id\)/,'Converted prospects must not rebuild prospect concepts.');
+assert.match(concept,/const customerId=Number\(p\.customer_id\|\|0\)/,'Builds must distinguish converted customers from sales prospects.');
+assert.match(concept,/\$\{slug\}-review/,'Converted customer rebuilds must use an isolated production-review alias.');
 assert.match(designWorker,/import staticBuildWorker from '\.\/concept-factory-v2\.js'/,'The top-level Concept Design Worker must route builds through the atomic preview deployer.');
 assert.match(migration,/concept_builds/,'Canonical migration must retain build history.');
 assert.match(migration,/asset_path/,'Canonical image metadata must store deployment-local asset paths.');
 assert.match(migration,/concept_build_id/,'Prospects must reference their current concept build.');
-assert.doesNotMatch(wrangler,/IMAGE_ASSETS|r2_buckets/,'Worker configuration must not require Cloudflare R2 for concept images.');
+assert.doesNotMatch(wrangler,/IMAGE_ASSETS/,'Generated concept imagery must not use the retired IMAGE_ASSETS binding.');
+assert.match(wrangler,/CUSTOMER_ASSETS/,'Customer-supplied production imagery must use isolated private storage.');
 const directHardening=designWorker.includes("import appWorker from './platform-hardening.js'");
 const reliabilityHardening=designWorker.includes("import appWorker from './reliability-hotfix.js'")&&reliabilityWorker.includes("import appWorker from './platform-hardening.js'");
-const staleRecoveryHardening=designWorker.includes("import appWorker from './stale-build-recovery.js'")&&staleRecovery.includes("import appWorker from './reliability-hotfix.js'")&&reliabilityWorker.includes("import appWorker from './platform-hardening.js'");
+const staleRecoveryHardening=designWorker.includes("import appWorker from './stale-build-recovery.js'")&&((staleRecovery.includes("import appWorker from './reliability-hotfix.js'")&&reliabilityWorker.includes("import appWorker from './platform-hardening.js'"))||(staleRecovery.includes("import appWorker from './customer-assets.js'")&&customerAssets.includes("import baseWorker from './reliability-hotfix.js'")&&reliabilityWorker.includes("import appWorker from './platform-hardening.js'")));
 assert.ok(/"main": "\.\/worker\/platform-hardening\.js"/.test(wrangler)||(/"main": "\.\/worker\/concept-design-worker\.js"/.test(wrangler)&&(directHardening||reliabilityHardening||staleRecoveryHardening)),'Platform hardening must remain available in the top-level Worker chain for non-build routes.');
 
 console.log('AI image pipeline invariants passed.');
