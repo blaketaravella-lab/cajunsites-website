@@ -18,6 +18,12 @@ function slugify(v){return clean(v,200).toLowerCase().normalize('NFKD').replace(
 function vq(env){const p=new URLSearchParams();if(env.VERCEL_TEAM_ID)p.set('teamId',env.VERCEL_TEAM_ID);return p.toString()?`?${p}`:''}
 function makeBuildId(id){return `${new Date().toISOString().replace(/[-:.]/g,'')}-${id}-${crypto.randomUUID().slice(0,8)}`}
 function b64FromBytes(bytes){let out='';const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)out+=String.fromCharCode(...bytes.subarray(i,i+chunk));return btoa(out)}
+async function applyProductionContent(env,customerId,prospect){
+  if(!customerId)return prospect;let row;try{row=await env.DB.prepare('SELECT draft_json,current_version FROM customer_site_content WHERE customer_id=? LIMIT 1').bind(customerId).first()}catch{return prospect}if(!row?.draft_json)return prospect;
+  let content;try{content=JSON.parse(row.draft_json)}catch{return prospect}const global=content?.global||{},home=content?.pages?.[0],sections=(home?.sections||[]).filter(x=>x?.visible!==false),hero=sections.find(x=>x.type==='hero'),services=sections.find(x=>x.type==='services'),process=sections.find(x=>x.type==='process'),research=readResearch(prospect)||{},model={...(JSON.parse(prospect.concept_design_model_json||'null')||research.concept_design_model||research.design_profile||{})};
+  if(hero?.heading)model.headline=hero.heading;if(hero?.cta_label)model.cta=hero.cta_label;if(sections.length)model.sections=sections.map(x=>x.type);if(process?.items?.length)model.process=process.items.map(x=>x.title).filter(Boolean);if(hero?.body)research.summary=hero.body;if(services?.items?.length)research.services=services.items.map(x=>({name:clean(x.title,120),description:clean(x.body,500),confidence:'high',source:'production_studio'})).filter(x=>x.name);
+  return{...prospect,business_name:global.business_name||prospect.business_name,phone:global.phone||prospect.phone,email:global.email||prospect.email,address:global.address||prospect.address,research_json:JSON.stringify(research),concept_design_model_json:JSON.stringify(model),production_content_json:row.draft_json,production_content_version:row.current_version};
+}
 async function applyCustomerImages(env,customerId,selection){
   if(!customerId||!env.CUSTOMER_ASSETS)return selection;
   let rows;
@@ -75,7 +81,7 @@ async function buildConcept(request,env,id){
   if(!env.DB)return json({ok:false,error:'Customer database is not configured.'},503);if(!sameOriginMutation(request))return json({ok:false,error:'Invalid request origin.'},403);
   const user=await currentUser(request,env);if(!user)return json({ok:false,error:'Authentication required.'},401);if(user.role==='read_only')return json({ok:false,error:'Your role is read only.'},403);
   if(!env.VERCEL_API_TOKEN||!env.DNS_INTEGRATION_API_KEY)return json({ok:false,error:'Concept builder setup is incomplete. VERCEL_API_TOKEN and DNS_INTEGRATION_API_KEY must be configured.'},503);
-  await ensureSchema(env);let p=await ensureResearch(request,env,id);if(!p)return json({ok:false,error:'Prospect not found.'},404);const customerId=Number(p.customer_id||0);
+  await ensureSchema(env);let p=await ensureResearch(request,env,id);if(!p)return json({ok:false,error:'Prospect not found.'},404);const customerId=Number(p.customer_id||0);p=await applyProductionContent(env,customerId,p);
   const research=readResearch(p);if(research?.identity_confidence==='low'){const message='Business research identity confidence is low. Review or rerun research before building the concept.';await env.DB.prepare(`UPDATE prospects SET concept_state='Build Failed',concept_build_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(message,id).run();return json({ok:false,error:message,requires_review:true},409)}
   const classification=classifyVisualFamily(p),system=getVisualSystem(p,classification),slug=slugify(p.concept_slug||p.business_name);if(!slug)return json({ok:false,error:'Could not create a valid concept subdomain from the business name.'},400);
   const alias=`${customerId?`${slug}-review`:slug}.cajunsites.com`,conceptUrl=`https://${alias}`,oldDeploymentId=clean(p.concept_deployment_id,255)||null,buildId=makeBuildId(id);
