@@ -1,4 +1,4 @@
-import appWorker from './customer-assets.js';
+import appWorker from './stale-build-recovery.js';
 import staticBuildWorker from './concept-factory-v2.js';
 import { compileConceptArchitecture, bridgeArchitectureIntoResearch, ARCHITECTURE_VERSION } from './concept-architecture.js';
 
