@@ -11,7 +11,7 @@ const hex=bytes=>Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'
 const safeName=name=>clean(name,180).replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/^-+|-+$/g,'')||'image';
 function cookie(request,name){for(const part of (request.headers.get('cookie')||'').split(';')){const [key,...rest]=part.trim().split('=');if(key===name)return decodeURIComponent(rest.join('='))}return ''}
 async function sha256(value){return hex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(value))))}
-async function hmac(value,secret){const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),'HMAC',{name:'HMAC',hash:'SHA-256'},false,['sign']);return hex(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(value)))}
+async function hmac(value,secret){const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return hex(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(value)))}
 function equal(a,b){a=String(a||'');b=String(b||'');if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0}
 function sameOrigin(request){const origin=request.headers.get('origin');if(!origin)return true;try{return new URL(origin).host===new URL(request.url).host}catch{return false}}
 async function ensureSchema(env){await env.DB.prepare(`CREATE TABLE IF NOT EXISTS customer_assets (
