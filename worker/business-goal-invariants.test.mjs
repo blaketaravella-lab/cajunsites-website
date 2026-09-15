@@ -70,7 +70,8 @@ assert.match(conceptFactory, /verifyLiveAlias/,'The activated concept alias must
 assert.ok(conceptFactory.indexOf('await assignAlias') < conceptFactory.indexOf('await verifyLiveAlias'),'Live alias verification must happen after activation.');
 assert.match(conceptFactory, /previous_deployment_id/,'Build history must retain the previous deployment for rollback.');
 assert.match(conceptFactory, /assignAlias\(env,oldDeploymentId,alias\)/,'Failed alias activation must support rollback to the previous deployment.');
-assert.match(conceptFactory, /if\(p\.customer_id\)/,'Converted prospects must not continue through prospect concept builds.');
+assert.match(conceptFactory, /const customerId=Number\(p\.customer_id\|\|0\)/,'Production builds must distinguish customers from sales concepts.');
+assert.match(conceptFactory, /\$\{slug\}-review/,'Customer production builds must remain isolated from prospect concept aliases.');
 assert.doesNotMatch(conceptFactory, /vercelUploadFile\(env,'vercel\.json'/,'Canonical concept builds must not install catch-all routing that can shadow static assets.');
 assert.match(conceptFactory, /native_static_preview_then_alias/,'Canonical concept builds must use native static preview deployment followed by explicit alias activation.');
 assert.doesNotMatch(conceptFactory, /target:'production'/,'Concept builds must not publish a candidate as production before verification.');
@@ -84,7 +85,8 @@ assert.match(imagePipeline, /\/assets\/secondary\.webp/,'Concept secondary image
 assert.match(imagePolicyResolver, /(?:policyId|policy_id):'food\.restaurant'/,'Restaurant concepts must retain restaurant-specific visual QA.');
 assert.match(imagePolicyResolver, /secondary image/i,'Restaurant visual QA must explicitly support distinct secondary compositions.');
 assert.match(imagePolicyResolver, /policy_mode/,'Visual policy resolution must expose specialized, derived, generic-safe, or blocked behavior.');
-assert.doesNotMatch(wrangler, /r2_buckets|IMAGE_ASSETS/,'Concept images must not silently reintroduce an R2 dependency.');
+assert.doesNotMatch(wrangler, /IMAGE_ASSETS/,'Generated concept images must not silently reintroduce the retired R2 binding.');
+assert.match(wrangler, /CUSTOMER_ASSETS/,'Approved customer photos must use private customer-scoped storage.');
 
 const visualIndex = globalCss.indexOf("@import './admin-visual-alignment.css';");
 const workspaceIndex = globalCss.indexOf("@import './prospect-workspace.css';");
